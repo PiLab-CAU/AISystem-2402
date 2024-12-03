@@ -26,4 +26,5 @@ def load_clip_model(device):
     
     # Initialize and move the classifier model to specified device
     model = CLIPClassifier(clip_model).to(device)
+
     return model

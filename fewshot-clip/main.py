@@ -44,11 +44,14 @@ def train_model(train_loader, model, criterion, optimizer, device):
     return avg_loss, accuracy
 
 def evaluate_model(test_loader, model, device):
+    print(f'evaluate ::: {device}')
+    
     model.eval()  # Set model to evaluation mode
     correct = 0
     total = 0
     with torch.no_grad():  # Disable gradient computation during evaluation
-        for images, labels in test_loader:
+        progress_bar = tqdm(test_loader, desc="Evaluating", leave=False)
+        for images, labels in progress_bar:
             images, labels = images.to(device), labels.to(device).float()
             outputs = model(images).squeeze()
             
@@ -63,7 +66,7 @@ def evaluate_model(test_loader, model, device):
 
 def main():
     # Set device (GPU if available, otherwise CPU)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     
     # Initialize data loaders and model
     train_loader, test_loader = get_data_loader("./train", "./test", batch_size=4)
@@ -95,4 +98,5 @@ def main():
             print(f"Model saved at {model_save_path} with accuracy: {best_accuracy:.2f}%")
 
 if __name__ == "__main__":
+    print("cuda:0" if torch.cuda.is_available() else "cpu")
     main()

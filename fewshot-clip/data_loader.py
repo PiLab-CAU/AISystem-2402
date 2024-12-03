@@ -3,6 +3,10 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 from torchvision import transforms
 
+import random
+import math
+import numpy as np
+
 class CustomAnomalyTransform:
     def __init__(self, p=0.5, size_range=(0.02, 0.4)):
         self.p = p

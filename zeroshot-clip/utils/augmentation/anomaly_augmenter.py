@@ -5,6 +5,14 @@ from .base import BaseAugmentation
 from .noise import GaussianNoise
 from .geometric import LocalDeformation
 from .color import ColorDistortion
+from .FrequencyFiltering import FrequencyFiltering
+import random
+
+def generate_color():
+    """
+    Generates [255, 0, 0] with 1/2 probability or [0, 0, 0] with 1/2 probability.
+    """
+    return [255, 0, 0] if random.random() < 0.5 else [0, 0, 0]
 
 class RandomDeletion(BaseAugmentation):
     def __call__(self, image: Image.Image) -> Image.Image:
@@ -17,6 +25,8 @@ class RandomDeletion(BaseAugmentation):
             y = np.random.randint(0, height - height//4)
             patch_w = np.random.randint(width//8, width//4)
             patch_h = np.random.randint(height//8, height//4)
+            color = generate_color()
+            # img_np[y:y+patch_h, x:x+patch_w] = color
             img_np[y:y+patch_h, x:x+patch_w] = 0
             
         return Image.fromarray(img_np)
@@ -27,7 +37,8 @@ class AnomalyAugmenter:
             GaussianNoise(severity),
             LocalDeformation(severity),
             ColorDistortion(severity),
-            RandomDeletion(severity)
+            RandomDeletion(severity),
+            FrequencyFiltering(severity),
         ]
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:

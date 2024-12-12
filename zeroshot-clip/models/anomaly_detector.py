@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple
 from PIL import Image
 from tqdm import tqdm
 from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
+import numpy as np
 
 class AnomalyDetector:
     def __init__(self, model, threshold: float = 0.2):
@@ -43,11 +44,13 @@ class AnomalyDetector:
             if features is None:
                 raise ValueError("Failed to extract features from image")
                 
-            score, normal_sim, anomaly_sim = self._compute_anomaly_score(features)
+            score, normal_sim, anomaly_sim, adaptive_threshold = self._compute_anomaly_score(features)
+
             if any(x is None for x in [score, normal_sim, anomaly_sim]):
                 raise ValueError("Failed to compute anomaly score")
                 
-            is_anomaly = score < self.threshold
+            # is_anomaly = score < self.threshold
+            is_anomaly = anomaly_sim < adaptive_threshold
             
             return {
                 'predicted_label': 'anomaly' if is_anomaly else 'normal',
@@ -141,6 +144,20 @@ class AnomalyDetector:
             
         return torch.cat(anomaly_embeddings, dim=0)
 
+    def _compute_adaptive_threshold(self, normal_similarities: List[float]) -> float:
+        """
+        Compute an adaptive threshold based on the distribution of normal similarities.
+        
+        Args:
+            normal_similarities (List[float]): List of normal similarity scores.
+            
+        Returns:
+            float: Adaptive threshold.
+        """
+        mean_similarity = np.mean(normal_similarities)
+        std_dev = np.std(normal_similarities)
+        return mean_similarity - 1 * std_dev  # 1 standard deviations below mean
+
     def _compute_anomaly_score(
         self, 
         image_features: torch.Tensor
@@ -163,6 +180,8 @@ class AnomalyDetector:
                 similarity = torch.cosine_similarity(image_features, class_embedding)
                 normal_similarities.append(similarity.item())
                 
+            adaptive_threshold = self._compute_adaptive_threshold(normal_similarities)
+
             if not normal_similarities:
                 raise ValueError("No normal similarities computed")
                 
@@ -175,7 +194,7 @@ class AnomalyDetector:
             mean_anomaly_similarity = anomaly_similarities.mean().item()
             
             anomaly_score = max_normal_similarity - mean_anomaly_similarity
-            return anomaly_score, max_normal_similarity, mean_anomaly_similarity
+            return anomaly_score, max_normal_similarity, mean_anomaly_similarity, adaptive_threshold
             
         except Exception as e:
             print(f"Error in compute_anomaly_score: {str(e)}")

@@ -13,7 +13,7 @@ class Config:
     n_samples: int = 5
     
     # Runtime settings
-    save_predictions: bool = True
+    save_predictions: bool = False
     save_results: bool = True
     
     def __post_init__(self):

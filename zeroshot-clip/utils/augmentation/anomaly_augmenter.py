@@ -1,42 +1,50 @@
 import numpy as np
 from PIL import Image
+import random
 from typing import List
 from .base import BaseAugmentation
-from .noise import GaussianNoise
-from .geometric import LocalDeformation
-from .color import ColorDistortion
-
-class RandomDeletion(BaseAugmentation):
-    def __call__(self, image: Image.Image) -> Image.Image:
-        img_np = np.array(image)
-        height, width = img_np.shape[:2]
-        
-        num_patches = np.random.randint(1, 4)
-        for _ in range(num_patches):
-            x = np.random.randint(0, width - width//4)
-            y = np.random.randint(0, height - height//4)
-            patch_w = np.random.randint(width//8, width//4)
-            patch_h = np.random.randint(height//8, height//4)
-            img_np[y:y+patch_h, x:x+patch_w] = 0
-            
-        return Image.fromarray(img_np)
+from .noise import GaussianNoise, TextureDeformation
+from .geometric import LocalDeformationAdvanced, RandomRotate
+from .color import AdvancedColorDistortion
 
 class AnomalyAugmenter:
     def __init__(self, severity: float = 0.7):
-        self.augmentations: List[BaseAugmentation] = [
-            GaussianNoise(severity),
-            LocalDeformation(severity),
-            ColorDistortion(severity),
-            RandomDeletion(severity)
+        """
+        Initialize advanced anomaly augmenter.
+        
+        Args:
+            severity: Base severity level for augmentations (default: 0.7)
+        """
+        self.augmentations = [
+            AdvancedColorDistortion(severity),
+            TextureDeformation(severity),
+            LocalDeformationAdvanced(severity),
+            RandomRotate(severity),
+            GaussianNoise(severity)  # GaussianNoise 추가
         ]
+        self.severity = severity
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:
-        # Generate anomaly images by combining multiple augmentations
-        num_augs = np.random.randint(2, 4)
-        selected_augs = np.random.choice(self.augmentations, num_augs, replace=False)
+        """
+        Generate anomaly with improved strategy.
         
+        Args:
+            image: Input image
+            
+        Returns:
+            Image.Image: Augmented anomaly image
+        """
+        # Randomly select number of augmentations (2-3)
+        num_augs = random.randint(2, 3)
+        
+        # Randomly select augmentations with adaptive severity
+        selected_augs = random.sample(self.augmentations, num_augs)
+        
+        # Apply augmentations sequentially with random severity adjustments
         img = image
         for aug in selected_augs:
+            # Adjust severity randomly for each augmentation
+            aug.severity = self.severity * random.uniform(0.8, 1.2)
             img = aug(img)
             
         return img

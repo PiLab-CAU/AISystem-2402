@@ -5,6 +5,8 @@ from .base import BaseAugmentation
 from .noise import GaussianNoise
 from .geometric import LocalDeformation
 from .color import ColorDistortion
+from .randomrotate import RandomRotation
+from .blur import RandomBlur
 
 class RandomDeletion(BaseAugmentation):
     def __call__(self, image: Image.Image) -> Image.Image:
@@ -24,19 +26,24 @@ class RandomDeletion(BaseAugmentation):
 class AnomalyAugmenter:
     def __init__(self, severity: float = 0.7):
         self.augmentations: List[BaseAugmentation] = [
-            GaussianNoise(severity),
-            LocalDeformation(severity),
-            ColorDistortion(severity),
-            RandomDeletion(severity)
+            GaussianNoise(severity * 1.2),
+            LocalDeformation(severity * 1.3),
+            ColorDistortion(severity * 1.1),
+            RandomDeletion(severity * 1.2),
+            RandomRotation(severity * 1.5),
+            RandomBlur(severity * 1.5)
         ]
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:
         # Generate anomaly images by combining multiple augmentations
-        num_augs = np.random.randint(2, 4)
+        num_augs = np.random.randint(3, 5) 
         selected_augs = np.random.choice(self.augmentations, num_augs, replace=False)
         
         img = image
         for aug in selected_augs:
             img = aug(img)
-            
+            if np.random.random() < 0.3:  # 30% 확률로 augmentation 중첩
+                additional_aug = np.random.choice(self.augmentations)
+                img = additional_aug(img)
+                
         return img

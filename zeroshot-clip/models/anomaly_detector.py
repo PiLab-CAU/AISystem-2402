@@ -14,7 +14,7 @@ class AnomalyDetector:
             threshold: Threshold for anomaly detection (default: 0.2)
         """
         self.model = model
-        self.threshold = threshold
+        self.threshold = 0.175
         self.class_embeddings = None
         self.anomaly_embeddings = None
         

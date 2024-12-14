@@ -5,6 +5,8 @@ from .base import BaseAugmentation
 from .noise import GaussianNoise
 from .geometric import LocalDeformation
 from .color import ColorDistortion
+from .randomrotate import RandomRotation
+from .blur import RandomBlur
 
 class RandomDeletion(BaseAugmentation):
     def __call__(self, image: Image.Image) -> Image.Image:
@@ -24,10 +26,12 @@ class RandomDeletion(BaseAugmentation):
 class AnomalyAugmenter:
     def __init__(self, severity: float = 0.7):
         self.augmentations: List[BaseAugmentation] = [
-            GaussianNoise(severity),
-            LocalDeformation(severity),
-            ColorDistortion(severity),
-            RandomDeletion(severity)
+            GaussianNoise(severity * 1.2),
+            LocalDeformation(severity * 1.3),
+            ColorDistortion(severity * 1.1),
+            RandomDeletion(severity * 1.2),
+            RandomRotation(severity * 1.5),
+            RandomBlur(severity * 1.5),
         ]
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:

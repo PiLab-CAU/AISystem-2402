@@ -116,32 +116,51 @@ class MissingPartAnomaly(BaseAugmentation):
         img_np = cv2.GaussianBlur(img_np, (kernel_size, kernel_size), 0)
         
         return Image.fromarray(img_np.astype(np.uint8))
+    
+class MosaicAugmentation(BaseAugmentation):
+    """여러 이미지를 결합하여 이상 데이터 생성"""
+    def __call__(self, image: Image.Image) -> Image.Image:
+        width, height = image.size
+        mosaic_image = Image.new('RGB', (width, height))
+        
+        for _ in range(4):  # 4개의 패치를 결합
+            x = np.random.randint(0, width // 2)
+            y = np.random.randint(0, height // 2)
+            patch = image.crop((0, 0, width // 2, height // 2))
+            mosaic_image.paste(patch, (x, y))
+        
+        return mosaic_image
 
-# 기존 AnomalyAugmenter 클래스 업데이트
+class AdvancedNoise(BaseAugmentation):
+    """Speckle Noise 추가"""
+    def __call__(self, image: Image.Image) -> Image.Image:
+        img_np = np.array(image).astype(np.float32)
+        noise = img_np * np.random.normal(0, self.severity * 0.1, img_np.shape)
+        noisy_img = np.clip(img_np + noise, 0, 255).astype(np.uint8)
+        return Image.fromarray(noisy_img)
+
 class AnomalyAugmenter:
     def __init__(self, severity: float = 0.7):
-        # 기본 증강
         self.base_augmentations: List[BaseAugmentation] = [
             GaussianNoise(severity),
             LocalDeformation(severity),
-            ColorDistortion(severity)
+            ColorDistortion(severity),
+            MosaicAugmentation(severity),
+            AdvancedNoise(severity)
         ]
-        
-        # 도메인 특화 증강
         self.domain_augmentations: List[BaseAugmentation] = [
             RedDotAnomaly(severity),
             BreakageAnomaly(severity),
             MissingPartAnomaly(severity)
         ]
-    
+
     def generate_anomaly(self, image: Image.Image) -> Image.Image:
-        # 도메인 특화 증강 중 하나를 선택
         domain_aug = np.random.choice(self.domain_augmentations)
         img = domain_aug(image)
-        
-        # 50% 확률로 기본 증강도 추가 적용
+
         if np.random.random() < 0.5:
             base_aug = np.random.choice(self.base_augmentations)
             img = base_aug(img)
-            
+        
         return img
+

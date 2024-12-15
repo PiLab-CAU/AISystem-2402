@@ -136,49 +136,46 @@ class EnsembleAnomalyDetector:
     
     def update_weights(self, validation_results: List[Dict]) -> None:
         """
-        검증 결과를 기반으로 가중치 업데이트
+        Validation 결과를 기반으로 앙상블 가중치를 최적화.
         
         Args:
-            validation_results: 검증 데이터에 대한 예측 결과 리스트
+            validation_results: Validation 데이터에 대한 예측 결과 리스트
         """
         if not validation_results:
             return
-            
+        
         accuracies = []
         for threshold in self.thresholds:
-            correct = sum(1 for result in validation_results 
-                        if (result['anomaly_score'] < threshold) == result['is_anomaly'])
-            accuracy = correct / len(validation_results)
-            accuracies.append(accuracy)
+            correct = sum(1 for result in validation_results if (result['anomaly_score'] < threshold) == result['is_anomaly'])
+            accuracies.append(correct / len(validation_results))
         
-        # 정확도 기반 가중치 계산
         total_accuracy = sum(accuracies)
         if total_accuracy > 0:
-            self.weights = [acc / total_accuracy for acc in accuracies]
+            self.weights = [accuracy / total_accuracy for accuracy in accuracies]
+        
+        print(f"Updated weights: {self.weights}")
 
-    def _compute_class_embeddings(
-        self, 
-        samples_dict: Dict[str, List[str]]
-    ) -> Dict[str, torch.Tensor]:
+    def _compute_class_embeddings(self, samples_dict: Dict[str, List[str]]) -> Dict[str, torch.Tensor]:
         """
-        Compute embeddings for each normal class.
+        Normal 클래스의 임베딩을 중간 레이어 출력으로 계산.
         
         Args:
-            samples_dict: Dictionary of normal sample paths
+            samples_dict: Normal 샘플 경로의 딕셔너리
             
         Returns:
-            Dict[str, torch.Tensor]: Dictionary of class embeddings
+            Dict[str, torch.Tensor]: 각 클래스의 중간 레이어 기반 임베딩
         """
         class_embeddings = {}
         
-        for class_name, image_paths in tqdm(samples_dict.items(), 
-                                          desc="Computing class embeddings"):
+        for class_name, image_paths in tqdm(samples_dict.items(), desc="Computing class embeddings"):
             embeddings = []
             for img_path in image_paths:
                 try:
                     image = Image.open(img_path).convert('RGB')
                     image_input = self.model.preprocess(image).unsqueeze(0).to(self.model.device)
-                    features = self.model.extract_features(image_input)
+                    # 중간 레이어에서 특성 추출
+                    with torch.no_grad():
+                        features = self.model.extract_features(image_input)
                     embeddings.append(features)
                 except Exception as e:
                     print(f"Error processing {img_path}: {str(e)}")
@@ -190,33 +187,30 @@ class EnsembleAnomalyDetector:
         
         return class_embeddings
 
-    def _generate_anomaly_embeddings(
-        self, 
-        samples_dict: Dict[str, List[str]], 
-        n_anomalies_per_class: int = 3
-    ) -> torch.Tensor:
+    def _generate_anomaly_embeddings(self, samples_dict: Dict[str, List[str]], n_anomalies_per_class: int = 3) -> torch.Tensor:
         """
-        Generate anomaly embeddings using augmentation.
+        Augmented 이미지로부터 이상 임베딩 생성 (중간 레이어 활용).
         
         Args:
-            samples_dict: Dictionary of normal sample paths
-            n_anomalies_per_class: Number of anomaly samples to generate per class
+            samples_dict: Normal 샘플 경로의 딕셔너리
+            n_anomalies_per_class: 클래스별 생성할 이상 샘플 수
             
         Returns:
-            torch.Tensor: Tensor of anomaly embeddings
+            torch.Tensor: 이상 샘플 임베딩
         """
         anomaly_embeddings = []
         augmenter = AnomalyAugmenter(severity=0.4)
         
-        for class_name, image_paths in tqdm(samples_dict.items(), 
-                                          desc="Generating anomaly embeddings"):
+        for class_name, image_paths in tqdm(samples_dict.items(), desc="Generating anomaly embeddings"):
             for img_path in image_paths[:n_anomalies_per_class]:
                 try:
                     image = Image.open(img_path).convert('RGB')
                     anomaly_image = augmenter.generate_anomaly(image)
                     
                     image_input = self.model.preprocess(anomaly_image).unsqueeze(0).to(self.model.device)
-                    features = self.model.extract_features(image_input)
+                    # 중간 레이어에서 특성 추출
+                    with torch.no_grad():
+                        features = self.model.extract_features(image_input)
                     anomaly_embeddings.append(features)
                 except Exception as e:
                     print(f"Error generating anomaly for {img_path}: {str(e)}")
@@ -266,3 +260,28 @@ class EnsembleAnomalyDetector:
         except Exception as e:
             print(f"Error in compute_anomaly_score: {str(e)}")
             return None, None, None
+    def optimize_threshold(self, validation_results: List[Dict]) -> None:
+        """
+        검증 데이터를 기반으로 최적 Threshold를 동적으로 최적화.
+        
+        Args:
+            validation_results: Validation 데이터에 대한 예측 결과 리스트
+        """
+        best_f1 = 0
+        best_threshold = None
+        for threshold in np.linspace(0.1, 0.5, num=50):  # Threshold 범위
+            tp = sum(1 for result in validation_results if result['anomaly_score'] < threshold and result['is_anomaly'])
+            fp = sum(1 for result in validation_results if result['anomaly_score'] < threshold and not result['is_anomaly'])
+            fn = sum(1 for result in validation_results if result['anomaly_score'] >= threshold and result['is_anomaly'])
+            
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+            
+            if f1 > best_f1:
+                best_f1 = f1
+                best_threshold = threshold
+        
+        self.thresholds = [best_threshold] * len(self.thresholds)  # 최적 Threshold를 모든 탐지기에 설정
+        print(f"Optimized threshold: {best_threshold:.2f} with F1 score: {best_f1:.2f}")
+

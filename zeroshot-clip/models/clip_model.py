@@ -34,4 +34,14 @@ class CLIPModel:
         """
         with torch.no_grad():
             features = self.model.encode_image(image)
-            return features / features.norm(dim=-1, keepdim=True)
+            features = features.float()  # double -> float 변환
+            
+            # 차원을 맞추기 위한 선형 변환 추가
+            if not hasattr(self, 'projection'):
+                self.projection = torch.nn.Linear(
+                    features.shape[-1], 
+                    512  # CLIP의 기본 임베딩 차원
+                ).to(self.device)
+                
+            projected_features = self.projection(features)
+            return projected_features / projected_features.norm(dim=-1, keepdim=True)

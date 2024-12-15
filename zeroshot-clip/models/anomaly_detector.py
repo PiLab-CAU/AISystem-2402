@@ -31,7 +31,8 @@ class AnomalyDetector:
 
     def _optimize_threshold(self) -> None:
         """Optimize threshold using synthetic anomalies"""
-        thresholds = torch.linspace(0.0, 1.0, 100)
+        # 임계값 범위를 더 현실적으로 조정
+        thresholds = torch.linspace(0.2, 0.8, 100)  
         best_f1 = 0
         best_threshold = self.threshold
 
@@ -39,21 +40,25 @@ class AnomalyDetector:
         normal_features = torch.stack(list(self.class_embeddings.values()))
         anomaly_features = self.anomaly_embeddings
 
-        for threshold in thresholds:
-            # Calculate scores
-            normal_scores = self._compute_scores(normal_features)
-            anomaly_scores = self._compute_scores(anomaly_features)
+        # 각 클래스별 분포 확인
+        normal_scores = self._compute_scores(normal_features)
+        anomaly_scores = self._compute_scores(anomaly_features)
 
+        # 가중치 설정
+        normal_weight = 1.2  # false positive 페널티 증가
+        anomaly_weight = 0.8
+
+        for threshold in thresholds:
             # Apply threshold
             normal_preds = normal_scores > threshold
             anomaly_preds = anomaly_scores > threshold
 
-            # Calculate metrics
-            tp = (~anomaly_preds).sum().item()
-            fp = (~normal_preds).sum().item()
-            fn = anomaly_preds.sum().item()
+            # Calculate weighted metrics
+            tp = (~anomaly_preds).sum().item() * anomaly_weight
+            fp = (~normal_preds).sum().item() * normal_weight
+            fn = anomaly_preds.sum().item() * anomaly_weight
 
-            # Calculate F1 score
+            # F1 score 계산
             precision = tp / (tp + fp) if (tp + fp) > 0 else 0
             recall = tp / (tp + fn) if (tp + fn) > 0 else 0
             f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
@@ -64,7 +69,11 @@ class AnomalyDetector:
 
         self.threshold = float(best_threshold)
         print(f"Optimized threshold: {self.threshold:.3f} (F1: {best_f1:.3f})")
-
+        
+        # 추가 정보 출력
+        print(f"Normal scores - Mean: {normal_scores.mean():.3f}, Std: {normal_scores.std():.3f}")
+        print(f"Anomaly scores - Mean: {anomaly_scores.mean():.3f}, Std: {anomaly_scores.std():.3f}")
+    
     def _compute_scores(self, features: torch.Tensor) -> torch.Tensor:
         """Compute anomaly scores for given features"""
         # Normalize features

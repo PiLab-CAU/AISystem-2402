@@ -19,7 +19,7 @@ class CLIPModel:
         Returns:
             tuple: (model, preprocess_function)
         """
-        model, preprocess = clip.load('ViT-L/14', self.device)
+        model, preprocess = clip.load('ViT-B/32', self.device)
         return model, preprocess
     
     def extract_features(self, image: torch.Tensor) -> torch.Tensor:
@@ -35,4 +35,3 @@ class CLIPModel:
         with torch.no_grad():
             features = self.model.encode_image(image)
             return features / features.norm(dim=-1, keepdim=True)
-

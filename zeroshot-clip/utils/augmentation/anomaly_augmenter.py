@@ -21,14 +21,27 @@ class AnomalyAugmenter:
         self.severity = severity
 
     def generate_anomaly(self, image: Image.Image) -> Image.Image:
-        # 더 적은 수의 augmentation 적용
-        num_augs = random.randint(2, 3)  # 2~3개만 적용
-        selected_augs = random.sample(self.augmentations, num_augs)
+        # 핵심 augmentation 세트 정의
+        core_deformations = [
+            LocalDeformationAdvanced(self.severity * 0.8),  # 부분적 변형
+            TextureDeformation(self.severity * 0.6)         # 표면 질감 변화
+        ]
         
+        # 추가 효과 세트 정의
+        additional_effects = [
+            GaussianNoise(self.severity * 0.4),       # 미세한 노이즈
+            RandomErase(self.severity * 0.5),         # 부분 손실
+            AdvancedColorDistortion(self.severity * 0.3)  # 미묘한 색상 변화
+        ]
+        
+        # 항상 core deformation 적용
         img = image
-        for aug in selected_augs:
-            # 변동폭도 줄임
-            aug.severity = self.severity * random.uniform(0.8, 1.3)
+        for aug in core_deformations:
             img = aug(img)
-            
+        
+        # 추가 효과 중 하나만 선택 적용
+        selected_effect = random.choice(additional_effects)
+        img = selected_effect(img)
+        
         return img
+    

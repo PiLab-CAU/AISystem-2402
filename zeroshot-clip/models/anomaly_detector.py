@@ -74,6 +74,7 @@ class AnomalyDetector:
         print(f"Normal scores - Mean: {normal_scores.mean():.3f}, Std: {normal_scores.std():.3f}")
         print(f"Anomaly scores - Mean: {anomaly_scores.mean():.3f}, Std: {anomaly_scores.std():.3f}")
     
+    
     def _compute_scores(self, features: torch.Tensor) -> torch.Tensor:
         """Compute anomaly scores for given features"""
         # Normalize features

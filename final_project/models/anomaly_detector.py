@@ -9,7 +9,7 @@ import torch
 from models.clip_model import CLIPModel
 
 class EnsembleAnomalyDetector:
-    def __init__(self, model: CLIPModel, thresholds: List[float] = [0.15, 0.175, 0.2, 0.225, 0.25]):
+    def __init__(self, model: CLIPModel, thresholds: List[float] = [0.15, 0.2, 0.25]):
         """
         여러 임계값과 특성을 가진 detector들의 앙상블
         
@@ -86,64 +86,31 @@ class EnsembleAnomalyDetector:
         final_anomaly_sim = sum(ensemble_anomaly_sims)
         
         return final_score, final_normal_sim, final_anomaly_sim
-    
-    def _compute_adaptive_threshold(self, image_features: torch.Tensor) -> float:
-        """
-        이미지별 Adaptive Threshold 계산.
-        
-        Args:
-            image_features: 입력 이미지의 특징 벡터
-            
-        Returns:
-            float: Adaptive Threshold 값
-        """
-        try:
-            if self.class_embeddings is None:
-                raise ValueError("Class embeddings not initialized. Call prepare() first.")
-            
-            # 정상 클래스와의 유사도 평균 및 표준 편차 계산
-            normal_similarities = []
-            for class_embedding in self.class_embeddings.values():
-                similarity = torch.cosine_similarity(image_features, class_embedding)
-                normal_similarities.append(similarity.item())
-            
-            if not normal_similarities:
-                raise ValueError("No normal similarities computed")
-            
-            # Adaptive Threshold 계산 (평균 유사도 - 표준 편차)
-            adaptive_threshold = max(normal_similarities) - np.std(normal_similarities)
-            return adaptive_threshold
-            
-        except Exception as e:
-            print(f"Error computing adaptive threshold: {str(e)}")
-            return float(np.mean(self.thresholds))  # 기본 Threshold로 fallback
 
     def predict(self, image: torch.Tensor) -> Dict:
         """
-        이미지에 대한 앙상블 예측 수행 (Adaptive Threshold 적용).
+        이미지에 대한 앙상블 예측 수행
         
         Args:
             image: 입력 이미지 텐서
             
         Returns:
-            Dict: 기존 출력 포맷 유지
+            Dict: 예측 결과 딕셔너리
         """
         try:
             features = self.model.extract_features(image)
             if features is None:
                 raise ValueError("Failed to extract features")
                 
-            # Adaptive Threshold 계산
-            adaptive_threshold = self._compute_adaptive_threshold(features)
-            
-            # 기존 이상 점수 계산
             score, normal_sim, anomaly_sim = self._compute_ensemble_score(features)
             if any(x is None for x in [score, normal_sim, anomaly_sim]):
                 raise ValueError("Failed to compute ensemble score")
             
-            # Adaptive Threshold와 Static Threshold 비교 후 결정
-            final_threshold = min(adaptive_threshold, np.mean(self.thresholds))  # 더 엄격한 Threshold 선택
-            is_anomaly = score < final_threshold
+            # 앙상블 기반 최종 판정
+            # 각 detector의 판정을 종합하여 최종 결정
+            anomaly_votes = sum(1 for threshold in self.thresholds 
+                              if score < threshold)
+            is_anomaly = anomaly_votes >= len(self.thresholds) / 2
             
             return {
                 'predicted_label': 'anomaly' if is_anomaly else 'normal',
@@ -151,7 +118,8 @@ class EnsembleAnomalyDetector:
                 'normal_similarity': float(normal_sim),
                 'anomaly_similarity': float(anomaly_sim),
                 'is_anomaly': is_anomaly,
-                'threshold': float(np.mean(self.thresholds)),  # 출력은 기존 Static Threshold 사용
+                'threshold': float(np.mean(self.thresholds)),  # 평균 임계값
+                'anomaly_votes': anomaly_votes
             }
             
         except Exception as e:
@@ -163,6 +131,7 @@ class EnsembleAnomalyDetector:
                 'anomaly_similarity': 0.0,
                 'is_anomaly': True,
                 'threshold': float(np.mean(self.thresholds)),
+                'anomaly_votes': 0
             }
     
     def update_weights(self, validation_results: List[Dict]) -> None:

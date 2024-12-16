@@ -6,7 +6,7 @@ from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
 import numpy as np
 
 class AnomalyDetector:
-    def __init__(self, model, threshold: float = 0.475):
+    def __init__(self, model, threshold: float = 0.615):
         """
         Initialize anomaly detector.
         
@@ -15,8 +15,8 @@ class AnomalyDetector:
             threshold: Threshold for anomaly detection (default: 0.2)
         """
         self.model = model
-        self.base_threshold = threshold  # 기본 임계값 저장
-        self.threshold = 0.475
+        self.base_threshold = threshold
+        self.threshold = 0.615
         self.class_embeddings = None
         self.anomaly_embeddings = None
         
@@ -112,7 +112,7 @@ class AnomalyDetector:
         n_anomalies_per_class: int = 3
     ) -> torch.Tensor:
         """
-        Generate anomaly embeddings using augmentation.
+        Generate anomaly embeddings using augmentation with fixed random seed.
         
         Args:
             samples_dict: Dictionary of normal sample paths
@@ -121,26 +121,38 @@ class AnomalyDetector:
         Returns:
             torch.Tensor: Tensor of anomaly embeddings
         """
+        torch.manual_seed(42)
+        np.random.seed(42)
+        
         anomaly_embeddings = []
         augmenter = AnomalyAugmenter(severity=0.4)
         
-        for class_name, image_paths in tqdm(samples_dict.items(), 
-                                          desc="Generating anomaly embeddings"):
-            for img_path in image_paths[:n_anomalies_per_class]:
+        for class_name, image_paths in sorted(samples_dict.items()):
+            print(f"Generating anomalies for class: {class_name}")
+            
+            selected_paths = sorted(image_paths)[:n_anomalies_per_class]
+            
+            for img_path in tqdm(selected_paths, desc=f"Processing {class_name}"):
                 try:
+                    img_seed = hash(img_path) % (2**32)
+                    torch.manual_seed(img_seed)
+                    np.random.seed(img_seed)
+                    
                     image = Image.open(img_path).convert('RGB')
                     anomaly_image = augmenter.generate_anomaly(image)
                     
                     image_input = self.model.preprocess(anomaly_image).unsqueeze(0).to(self.model.device)
                     features = self.model.extract_features(image_input)
                     anomaly_embeddings.append(features)
+                    
                 except Exception as e:
                     print(f"Error generating anomaly for {img_path}: {str(e)}")
                     continue
         
         if not anomaly_embeddings:
             raise ValueError("Failed to generate any anomaly embeddings")
-            
+        
+        torch.manual_seed(42)
         return torch.cat(anomaly_embeddings, dim=0)
 
     def _compute_anomaly_score(self, image_features: torch.Tensor) -> Tuple[float, float, float]:
@@ -174,8 +186,8 @@ class AnomalyDetector:
             mean_anomaly_similarity = anomaly_similarities.mean().item()
             
             # 수정된 점수 계산 방식
-            normal_score = (max_cosine * 0.8) 
-            anomaly_penalty = (normalized_dist * 0.4 + (mean_anomaly_similarity * 0.4))
+            normal_score = (max_cosine * 0.7 + (1 - normalized_dist) * 0.3)
+            anomaly_penalty = (mean_anomaly_similarity * 0.5)
             combined_score = normal_score - anomaly_penalty
             
             return combined_score, max_cosine, mean_anomaly_similarity

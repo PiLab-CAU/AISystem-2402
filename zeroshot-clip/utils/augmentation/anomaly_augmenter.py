@@ -27,13 +27,13 @@ class RandomDeletion(BaseAugmentation):
 class AnomalyAugmenter:
     def __init__(self, severity: float = 0.7):
         self.augmentations: List[BaseAugmentation] = [
-            GaussianNoise(severity * 1.2),
-            LocalDeformation(severity * 1.3),
-            ColorDistortion(severity * 1.1),
-            RandomDeletion(severity * 1.2),
-            RandomRotation(severity * 1.5),
-            RandomBlur(severity * 1.5),
-            RedDotAnomaly(severity * 1.4)
+            GaussianNoise(severity * 1.4),  
+            LocalDeformation(severity * 1.2),
+            ColorDistortion(severity * 1.3),     
+            RandomDeletion(severity * 1.1),     
+            RandomRotation(severity * 1.6), 
+            RandomBlur(severity * 1.7),    
+            RedDotAnomaly(severity * 1.5) 
         ]
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:

@@ -4,7 +4,7 @@ import clip
 class CLIPModel:
     def __init__(self, device: str):
         """
-        Initialize CLIP model.
+        Initialize CLIP model with weighted feature extraction.
         
         Args:
             device: Device to run the model on ('cuda' or 'cpu')
@@ -12,41 +12,42 @@ class CLIPModel:
         self.device = device
         self.models = {}
         self.preprocess = None
+        self.weights = {
+            'ViT-B/32': 0.3,
+            'ViT-B/16': 0.7
+        }
         self._load_clip_model()
         
     def _load_clip_model(self):
         """
         Load multiple CLIP models and preprocessing function.
         """
-        model_names = ['ViT-B/32', 'ViT-B/16']
-        
-        for name in model_names:
-            model, preprocess = clip.load(name, self.device)
-            self.models[name] = model
-        
+        for model_name in self.weights.keys():
+            model, preprocess = clip.load(model_name, self.device)
+            self.models[model_name] = model
+            
         self.preprocess = preprocess
     
     def extract_features(self, image: torch.Tensor) -> torch.Tensor:
         """
-        Extract and combine features from multiple CLIP models.
+        Extract and combine features from multiple CLIP models with weights.
         
         Args:
             image: Input image tensor
             
         Returns:
-            torch.Tensor: Combined normalized feature vector
+            torch.Tensor: Weighted and combined normalized feature vector
         """
         features = []
+        
         with torch.no_grad():
-            for model in self.models.values():
+            for model_name, model in self.models.items():
                 feat = model.encode_image(image)
                 feat = feat / feat.norm(dim=-1, keepdim=True)
+                feat = feat * self.weights[model_name]
                 features.append(feat)
-                
-            if len(features) > 1:
-                combined_features = torch.cat(features, dim=-1)
-                combined_features = combined_features / combined_features.norm(dim=-1, keepdim=True)
-            else:
-                combined_features = features[0]
-                
+            
+            combined_features = torch.cat(features, dim=-1)
+            combined_features = combined_features / combined_features.norm(dim=-1, keepdim=True)
+            
             return combined_features

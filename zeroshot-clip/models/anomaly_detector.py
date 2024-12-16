@@ -3,9 +3,10 @@ from typing import Dict, List, Tuple
 from PIL import Image
 from tqdm import tqdm
 from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
+import numpy as np
 
 class AnomalyDetector:
-    def __init__(self, model, threshold: float = 0.2):
+    def __init__(self, model, threshold: float = 0.475):
         """
         Initialize anomaly detector.
         
@@ -14,7 +15,8 @@ class AnomalyDetector:
             threshold: Threshold for anomaly detection (default: 0.2)
         """
         self.model = model
-        self.threshold = 0.175
+        self.base_threshold = threshold  # 기본 임계값 저장
+        self.threshold = 0.475
         self.class_embeddings = None
         self.anomaly_embeddings = None
         
@@ -141,42 +143,43 @@ class AnomalyDetector:
             
         return torch.cat(anomaly_embeddings, dim=0)
 
-    def _compute_anomaly_score(
-        self, 
-        image_features: torch.Tensor
-    ) -> Tuple[float, float, float]:
-        """
-        Compute anomaly score for given image features.
-        
-        Args:
-            image_features: Extracted image features
-            
-        Returns:
-            Tuple[float, float, float]: Anomaly score, normal similarity, and anomaly similarity
-        """
+    def _compute_anomaly_score(self, image_features: torch.Tensor) -> Tuple[float, float, float]:
         try:
             if self.class_embeddings is None or self.anomaly_embeddings is None:
                 raise ValueError("Embeddings not initialized. Call prepare() first.")
                 
-            normal_similarities = []
-            for class_embedding in self.class_embeddings.values():
-                similarity = torch.cosine_similarity(image_features, class_embedding)
-                normal_similarities.append(similarity.item())
-                
-            if not normal_similarities:
-                raise ValueError("No normal similarities computed")
-                
-            max_normal_similarity = max(normal_similarities)
+            cosine_similarities = []
+            euclidean_distances = []
             
+            for class_embedding in self.class_embeddings.values():
+                cos_sim = torch.cosine_similarity(image_features, class_embedding)
+                cosine_similarities.append(cos_sim.item())
+                
+                euc_dist = torch.norm(image_features - class_embedding, dim=-1)
+                euclidean_distances.append(euc_dist.item())
+            
+            max_cosine = max(cosine_similarities)
+            min_distance = min(euclidean_distances)
+            
+            # 거리 정규화
+            max_dist = max(euclidean_distances)
+            min_dist = min(euclidean_distances)
+            normalized_dist = (min_distance - min_dist) / (max_dist - min_dist + 1e-6)
+            
+            # 이상치 클래스와의 유사도
             anomaly_similarities = torch.cosine_similarity(
                 image_features.expand(self.anomaly_embeddings.shape[0], -1),
                 self.anomaly_embeddings
             )
             mean_anomaly_similarity = anomaly_similarities.mean().item()
             
-            anomaly_score = max_normal_similarity - mean_anomaly_similarity
-            return anomaly_score, max_normal_similarity, mean_anomaly_similarity
+            # 수정된 점수 계산 방식
+            normal_score = (max_cosine * 0.8) 
+            anomaly_penalty = (normalized_dist * 0.4 + (mean_anomaly_similarity * 0.4))
+            combined_score = normal_score - anomaly_penalty
             
+            return combined_score, max_cosine, mean_anomaly_similarity
+                
         except Exception as e:
             print(f"Error in compute_anomaly_score: {str(e)}")
             return None, None, None

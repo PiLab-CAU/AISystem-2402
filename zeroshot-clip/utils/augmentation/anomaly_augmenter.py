@@ -7,6 +7,7 @@ from .geometric import LocalDeformation
 from .color import ColorDistortion
 from .randomrotate import RandomRotation
 from .blur import RandomBlur
+from .reddot import RedDotAnomaly
 
 class RandomDeletion(BaseAugmentation):
     def __call__(self, image: Image.Image) -> Image.Image:
@@ -32,6 +33,7 @@ class AnomalyAugmenter:
             RandomDeletion(severity * 1.2),
             RandomRotation(severity * 1.5),
             RandomBlur(severity * 1.5),
+            RedDotAnomaly(severity * 1.4)
         ]
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:

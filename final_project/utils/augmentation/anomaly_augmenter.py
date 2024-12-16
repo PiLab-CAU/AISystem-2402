@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from .base import BaseAugmentation
 import cv2
+from utils.seed_utils import set_global_seed
 
 class RedDotAnomaly(BaseAugmentation):
     """작은 빨간 점 이상치를 시뮬레이션하는 증강"""
@@ -121,6 +122,7 @@ class MissingPartAnomaly(BaseAugmentation):
 class AnomalyAugmenter:
     def __init__(self, severity: float = 0.7):
         # 기본 증강
+        set_global_seed(42)
         self.base_augmentations: List[BaseAugmentation] = [
             GaussianNoise(severity),
             LocalDeformation(severity),

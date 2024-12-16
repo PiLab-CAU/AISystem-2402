@@ -6,10 +6,10 @@ from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
 from typing import Dict, List, Tuple
 import numpy as np
 import torch
-from models.clip_model import CLIPModel
+from models.clip_model import EnhancedCLIPModel
 
 class EnsembleAnomalyDetector:
-    def __init__(self, model: CLIPModel, thresholds: List[float] = [0.15, 0.2, 0.25]):
+    def __init__(self, model: EnhancedCLIPModel, thresholds: List[float] = [0.15, 0.2, 0.25]):
         """
         여러 임계값과 특성을 가진 detector들의 앙상블
         

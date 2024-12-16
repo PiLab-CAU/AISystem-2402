@@ -2,7 +2,7 @@ import os
 import torch
 from tqdm import tqdm
 from typing import Dict, List, Tuple
-from models.clip_model import CLIPModel
+from models.clip_model import EnhancedCLIPModel
 from models.anomaly_detector import EnsembleAnomalyDetector
 
 from utils.data_loader import (
@@ -15,6 +15,7 @@ from utils.data_loader import (
 from utils.metrics import PerformanceEvaluator
 from utils.visualization import save_predictions
 from config import Config
+from utils.seed_utils import set_global_seed
 
 def setup_environment(config: Config) -> Tuple[str, str, str]:
     """
@@ -40,7 +41,7 @@ def setup_environment(config: Config) -> Tuple[str, str, str]:
     return device, train_path, test_path
 
 def initialize_models(device: str, config: Config):
-    clip_model = CLIPModel(device)
+    clip_model = EnhancedCLIPModel(device)
     detector = EnsembleAnomalyDetector(
         model=clip_model,
         thresholds=config.ensemble_thresholds
@@ -102,6 +103,7 @@ def process_images(
             print(f"- {img_path}: {error}")
 
 def main():
+    set_global_seed(42)
     try:
         # Load configuration
         config = Config()

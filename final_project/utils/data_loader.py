@@ -3,6 +3,7 @@ from PIL import Image
 from typing import Dict, List, Tuple
 import torch
 import random
+from utils.seed_utils import set_global_seed
 
 def load_normal_samples(train_path: str, n_samples: int = 5) -> Dict[str, List[str]]:
     """
@@ -15,6 +16,7 @@ def load_normal_samples(train_path: str, n_samples: int = 5) -> Dict[str, List[s
     Returns:
         Dict[str, List[str]]: Dictionary of image paths by class
     """
+    set_global_seed(42)
     normal_samples = {}
     
     for category_name in os.listdir(train_path):

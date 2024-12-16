@@ -14,15 +14,10 @@ class RandomDeletion(BaseAugmentation):
         
         num_patches = np.random.randint(1, 4)
         for _ in range(num_patches):
-            '''x = np.random.randint(0, width - width//4)
+            x = np.random.randint(0, width - width//4)
             y = np.random.randint(0, height - height//4)
             patch_w = np.random.randint(width//8, width//4)
-            patch_h = np.random.randint(height//8, height//4)'''
-
-            x = np.random.randint(width//4, width - width//4)
-            y = np.random.randint(height//4, height - height//4)
-            patch_w = np.random.randint(width//16, width//8)
-            patch_h = np.random.randint(height//16, height//8)
+            patch_h = np.random.randint(height//8, height//4)
 
             img_np[y:y+patch_h, x:x+patch_w] = 0
             
@@ -34,10 +29,8 @@ class AnomalyAugmenter:
             GaussianNoise(severity),
             LocalDeformation(severity),
             ColorDistortion(severity),
-            #RandomDeletion(severity),
+            RandomDeletion(severity),
             transforms.RandomRotation(severity*100)
-            #transforms.RandomHorizontalFlip(p=severity),
-            #transforms.RandomVerticalFlip(p=severity)
         ]
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:
@@ -48,8 +41,5 @@ class AnomalyAugmenter:
         img = image
         for aug in selected_augs:
             img = aug(img)
-
-        aug_del = RandomDeletion()
-        img = aug_del(img)
             
         return img

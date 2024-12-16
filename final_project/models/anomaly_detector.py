@@ -3,7 +3,6 @@ from typing import Dict, List, Tuple
 from PIL import Image
 from tqdm import tqdm
 from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
-import numpy as np
 
 class AnomalyDetector:
     def __init__(self, model, threshold: float = 0.2):
@@ -16,7 +15,6 @@ class AnomalyDetector:
         """
         self.model = model
         self.threshold = threshold
-        self.thresholds = {}
         self.class_embeddings = None
         self.anomaly_embeddings = None
         
@@ -29,21 +27,6 @@ class AnomalyDetector:
         """
         self.class_embeddings = self._compute_class_embeddings(normal_samples)
         self.anomaly_embeddings = self._generate_anomaly_embeddings(normal_samples)
-        self.thresholds = self.compute_thresholds()
-        #for class_name, class_embedding in self.class_embeddings.items():
-                #similarity = torch.cosine_similarity(self.anomaly_embeddings[class_name], class_embedding)
-
-                
-    def compute_thresholds(self) -> None:
-        thresholds = {}
-        for class_name, class_embedding in self.class_embeddings.items():
-            dissimilarity = 1 - torch.cosine_similarity(self.anomaly_embeddings[class_name], class_embedding)
-            #print(similarity, similarity - 0.1*similarity)
-            thresholds[class_name] = dissimilarity - 0.1*dissimilarity #todo, this is just a similarity not treshold, have to add some deviation (-0.02)
-                # best - 0.05 or 0.1 even better*similarity
-
-        return thresholds
-
 
     def predict(self, image: torch.Tensor) -> Dict:
         """
@@ -60,11 +43,11 @@ class AnomalyDetector:
             if features is None:
                 raise ValueError("Failed to extract features from image")
                 
-            score, normal_sim, anomaly_sim, class_name = self._compute_anomaly_score(features)
+            score, normal_sim, anomaly_sim = self._compute_anomaly_score(features)
             if any(x is None for x in [score, normal_sim, anomaly_sim]):
                 raise ValueError("Failed to compute anomaly score")
                 
-            is_anomaly = score < self.thresholds[class_name]
+            is_anomaly = score < self.threshold
             
             return {
                 'predicted_label': 'anomaly' if is_anomaly else 'normal',
@@ -136,32 +119,27 @@ class AnomalyDetector:
         Returns:
             torch.Tensor: Tensor of anomaly embeddings
         """
-        anomaly_embeddings = {}
-        augmenter = AnomalyAugmenter(severity=0.2)
+        anomaly_embeddings = []
+        augmenter = AnomalyAugmenter(severity=0.4)
         
         for class_name, image_paths in tqdm(samples_dict.items(), 
                                           desc="Generating anomaly embeddings"):
-            embeddings = []
             for img_path in image_paths[:n_anomalies_per_class]:
                 try:
                     image = Image.open(img_path).convert('RGB')
                     anomaly_image = augmenter.generate_anomaly(image)
+                    
                     image_input = self.model.preprocess(anomaly_image).unsqueeze(0).to(self.model.device)
                     features = self.model.extract_features(image_input)
-                    embeddings.append(features)
+                    anomaly_embeddings.append(features)
                 except Exception as e:
                     print(f"Error generating anomaly for {img_path}: {str(e)}")
                     continue
-
-            if embeddings:
-                class_embedding = torch.mean(torch.stack(embeddings), dim=0)
-                anomaly_embeddings[class_name] = class_embedding / class_embedding.norm(dim=-1, keepdim=True)
         
-        #if not anomaly_embeddings:
-            #raise ValueError("Failed to generate any anomaly embeddings")
+        if not anomaly_embeddings:
+            raise ValueError("Failed to generate any anomaly embeddings")
             
-        return anomaly_embeddings
-
+        return torch.cat(anomaly_embeddings, dim=0)
 
     def _compute_anomaly_score(
         self, 
@@ -181,31 +159,23 @@ class AnomalyDetector:
                 raise ValueError("Embeddings not initialized. Call prepare() first.")
                 
             normal_similarities = []
-            classes = []
-            for class_name, class_embedding in self.class_embeddings.items():
+            for class_embedding in self.class_embeddings.values():
                 similarity = torch.cosine_similarity(image_features, class_embedding)
                 normal_similarities.append(similarity.item())
-                classes.append(class_name)
                 
             if not normal_similarities:
                 raise ValueError("No normal similarities computed")
                 
-            max_normal_similarity_index = np.argmax(normal_similarities)
-            max_normal_similarity = normal_similarities[max_normal_similarity_index]
-
-            class_name_similarity = classes[max_normal_similarity_index]
+            max_normal_similarity = max(normal_similarities)
             
             anomaly_similarities = torch.cosine_similarity(
-                image_features,
-                self.anomaly_embeddings[class_name_similarity]
+                image_features.expand(self.anomaly_embeddings.shape[0], -1),
+                self.anomaly_embeddings
             )
-            #anomaly_similarities = 0
-
-            #self.threshold = np.percentile(normal_similarities, 5)
-            #print(self.threshold)
+            mean_anomaly_similarity = anomaly_similarities.mean().item()
             
-            anomaly_score = max_normal_similarity - anomaly_similarities
-            return anomaly_score, max_normal_similarity, anomaly_similarities, class_name_similarity
+            anomaly_score = max_normal_similarity - mean_anomaly_similarity
+            return anomaly_score, max_normal_similarity, mean_anomaly_similarity
             
         except Exception as e:
             print(f"Error in compute_anomaly_score: {str(e)}")

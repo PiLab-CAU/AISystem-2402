@@ -20,7 +20,8 @@ class TextureDeformation(BaseAugmentation):
             self._apply_emboss,
             self._apply_edge_enhance,
             self._apply_contour,
-            self._apply_smooth  # 새로운 operation
+            self._apply_smooth,
+            self._apply_red_dots  # 새로운 operation 추가
         ]
         
         num_ops = random.randint(2, 4)
@@ -103,6 +104,32 @@ class TextureDeformation(BaseAugmentation):
             return image.filter(ImageFilter.SMOOTH)
         else:
             return image.filter(ImageFilter.SMOOTH_MORE)
+        
+    def _apply_red_dots(self, image: Image.Image) -> Image.Image:
+        """Add random red dots to the image"""
+        img_np = np.array(image)
+        height, width = img_np.shape[:2]
+        
+        # 점의 개수 (1-3개)
+        num_dots = random.randint(1, 3)
+        
+        for _ in range(num_dots):
+            # 점의 크기 (반지름)
+            radius = random.randint(2, 5)
+            
+            # 점의 위치
+            x = random.randint(radius, width - radius)
+            y = random.randint(radius, height - radius)
+            
+            # 빨간 점 생성
+            for i in range(-radius, radius + 1):
+                for j in range(-radius, radius + 1):
+                    if i*i + j*j <= radius*radius:  # 원형 점 생성
+                        if 0 <= y+i < height and 0 <= x+j < width:
+                            # 빨간색 (RGB)
+                            img_np[y+i, x+j] = [255, 0, 0]
+        
+        return Image.fromarray(img_np)
 
 class RandomErase(BaseAugmentation):
     def __call__(self, image: Image.Image) -> Image.Image:
@@ -117,25 +144,14 @@ class RandomErase(BaseAugmentation):
             x = random.randint(0, w - rw)
             y = random.randint(0, h - rh)
             
-            fill_type = random.choice(['zero', 'noise', 'color', 'pattern'])  # pattern 추가
+            # color와 pattern 제거하고 zero와 noise만 사용
+            fill_type = random.choice(['zero', 'noise'])
             
             if fill_type == 'zero':
                 img_np[y:y+rh, x:x+rw] = 0
-            elif fill_type == 'noise':
+            else:  # noise
                 noise = np.random.randint(0, 255, (rh, rw, 3))
                 img_np[y:y+rh, x:x+rw] = noise
-            elif fill_type == 'pattern':
-                # 체크보드 패턴 생성
-                pattern = np.zeros((rh, rw, 3), dtype=np.uint8)
-                square_size = 4
-                for i in range(0, rh, square_size):
-                    for j in range(0, rw, square_size):
-                        if (i//square_size + j//square_size) % 2:
-                            pattern[i:i+square_size, j:j+square_size] = 255
-                img_np[y:y+rh, x:x+rw] = pattern
-            else:  # color
-                color = np.random.randint(0, 255, 3)
-                img_np[y:y+rh, x:x+rw] = color
         
         return Image.fromarray(img_np)
     

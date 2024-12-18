@@ -4,10 +4,11 @@ from typing import Dict, List, Tuple
 import torch
 import random
 from utils.seed_utils import set_global_seed
+from utils.augmentation.normal_augmenter import NormalAugmenter
 
 def load_normal_samples(train_path: str, n_samples: int = 5) -> Dict[str, List[str]]:
     """
-    Load few-shot samples of normal data.
+    Load and augment few-shot samples of normal data.
     
     Args:
         train_path: Path to training data directory
@@ -18,16 +19,39 @@ def load_normal_samples(train_path: str, n_samples: int = 5) -> Dict[str, List[s
     """
     set_global_seed(42)
     normal_samples = {}
+    augmenter = NormalAugmenter()
+    
+    # 임시 디렉토리 생성
+    aug_dir = os.path.join(os.path.dirname(train_path), 'augmented_train')
+    os.makedirs(aug_dir, exist_ok=True)
     
     for category_name in os.listdir(train_path):
         category_path = os.path.join(train_path, category_name)
+        aug_category_path = os.path.join(aug_dir, category_name)
+        os.makedirs(aug_category_path, exist_ok=True)
         
         if os.path.isdir(category_path):
             image_files = [f for f in os.listdir(category_path) 
                             if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
             selected_files = random.sample(image_files, min(n_samples, len(image_files)))
-            normal_samples[category_name] = [os.path.join(category_path, img) 
-                                            for img in selected_files]
+            
+            augmented_paths = []
+            for img_file in selected_files:
+                img_path = os.path.join(category_path, img_file)
+                image = Image.open(img_path).convert('RGB')
+                
+                # 원본 이미지 경로 추가
+                augmented_paths.append(img_path)
+                
+                # 증강된 이미지 생성 및 저장
+                augmented_images = augmenter.generate_augmented_images(image)
+                for idx, aug_img in enumerate(augmented_images):
+                    aug_name = f"aug_{idx}_{img_file}"
+                    aug_path = os.path.join(aug_category_path, aug_name)
+                    aug_img.save(aug_path)
+                    augmented_paths.append(aug_path)
+            
+            normal_samples[category_name] = augmented_paths
             
     return normal_samples
 

@@ -1,5 +1,6 @@
 import torch
 import clip
+import math
 
 class CLIPModel:
     def __init__(self, device: str):
@@ -60,28 +61,49 @@ class CLIPModel:
                 self.weights[model] += (self.weights[model] / total_remaining) * weight_to_distribute
     
     def extract_features(self, image: torch.Tensor) -> torch.Tensor:
-        """
-        Extract and combine features from multiple CLIP models with weights.
-        
-        Args:
-            image: Input image tensor
-            
-        Returns:
-            torch.Tensor: Weighted and combined normalized feature vector
-        """
         features = []
+        attention_weights = []
         
         with torch.no_grad():
             for model_name, model in self.models.items():
-                feat = model.encode_image(image)
-                feat = feat / feat.norm(dim=-1, keepdim=True)
+                # Multi-scale 특징 추출을 위한 이미지 크기 조정
+                # clip_model.py에서
+                image_scales = [0.5, 0.75, 1.0, 1.25, 1.5]  # 스케일 범위 확대  
+                model_features = []
                 
-                attention = torch.nn.functional.softmax(feat.mean(dim=-1), dim=0)
-                feat = feat * attention.unsqueeze(-1)
+                for scale in image_scales:
+                    # 이미지 크기 조정
+                    scaled_size = [int(x * scale) for x in image.shape[-2:]]
+                    scaled_image = torch.nn.functional.interpolate(
+                        image, 
+                        size=scaled_size, 
+                        mode='bilinear'
+                    )
+                    scaled_image = torch.nn.functional.interpolate(
+                        scaled_image, 
+                        size=image.shape[-2:], 
+                        mode='bilinear'
+                    )
+                    
+                    # 특징 추출
+                    feat = model.encode_image(scaled_image)
+                    feat = feat / feat.norm(dim=-1, keepdim=True)
+                    model_features.append(feat)
                 
-                feat = feat * self.weights[model_name]
-                features.append(feat)
+                # 여러 스케일의 특징을 결합
+                multi_scale_feat = torch.mean(torch.stack(model_features), dim=0)
+                
+                # Attention 계산
+                attention = torch.nn.functional.softmax(
+                    multi_scale_feat.mean(dim=-1) * math.sqrt(multi_scale_feat.size(-1)), 
+                    dim=0
+                )
+                
+                weighted_feat = multi_scale_feat * attention.unsqueeze(-1)
+                features.append(weighted_feat * self.weights[model_name])
+                attention_weights.append(attention)
             
+            # 모든 모델의 특징을 결합
             combined_features = torch.cat(features, dim=-1)
             combined_features = combined_features / combined_features.norm(dim=-1, keepdim=True)
             

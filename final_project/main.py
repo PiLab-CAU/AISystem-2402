@@ -3,7 +3,7 @@ import torch
 from tqdm import tqdm
 from typing import Dict, List, Tuple
 from models.clip_model import EnhancedCLIPModel
-from models.anomaly_detector import EnsembleAnomalyDetector
+from models.anomaly_detector import EnhancedEnsembleAnomalyDetector
 
 from utils.data_loader import (
     load_normal_samples,
@@ -42,46 +42,71 @@ def setup_environment(config: Config) -> Tuple[str, str, str]:
 
 def initialize_models(device: str, config: Config):
     clip_model = EnhancedCLIPModel(device)
-    detector = EnsembleAnomalyDetector(
+    detector = EnhancedEnsembleAnomalyDetector(
         model=clip_model,
         thresholds=config.ensemble_thresholds
     )
     return clip_model, detector
-
+def extract_category_from_path(image_path: str) -> str:
+    """
+    이미지 경로에서 카테고리 추출
+    
+    Args:
+        image_path: 이미지 파일 경로
+        
+    Returns:
+        str: 카테고리 이름
+    """
+    # 경로 구조에 따라 적절히 수정 필요
+    # 예: "path/to/Calculator/normal/image.jpg" -> "Calculator"
+    parts = image_path.split(os.sep)
+    # 카테고리는 normal/anomaly 폴더의 상위 폴더
+    try:
+        category_idx = parts.index("normal") - 1
+        return parts[category_idx]
+    except ValueError:
+        try:
+            category_idx = parts.index("anomaly") - 1
+            return parts[category_idx]
+        except ValueError:
+            raise ValueError(f"Cannot extract category from path: {image_path}")
 def process_images(
-    detector: EnsembleAnomalyDetector,
+    detector: EnhancedEnsembleAnomalyDetector,
     test_images: Dict[str, List[str]],
     evaluator: PerformanceEvaluator,
     config: Config
 ) -> None:
     """
     Process test images and evaluate results.
-    
-    Args:
-        detector: Anomaly detector model
-        test_images: Dictionary of test image paths
-        evaluator: Performance evaluator
-        config: Configuration object
     """
     skipped_images = []
     
     for true_label, image_paths in test_images.items():
         for image_path in tqdm(image_paths, desc=f"Processing {true_label} images"):
             try:
-                # Load image
+                # 이미지의 카테고리 추출 (경로에서)
+                category = extract_category_from_path(image_path)
+                detector.set_category(category)
+                
+                # 이미지 로드 및 예측
                 image = load_image(image_path, detector.model.preprocess, detector.model.device)
                 if image is None:
                     raise ValueError("Failed to load image")
                     
-                # Prediction
                 prediction = detector.predict(image)
                 if prediction['predicted_label'] == 'error':
                     raise ValueError("Prediction failed")
-                    
-                # Save results
+                
+                # 결과 저장
                 evaluator.add_result(true_label, prediction)
                 
-                # Save visualization
+                # 임계값 업데이트
+                detector.update_threshold(
+                    prediction['anomaly_score'],
+                    true_label
+                )
+                
+                # 예측 결과 시각화 저장
                 if config.save_predictions:
                     save_predictions(
                         image_path=image_path,
@@ -95,13 +120,11 @@ def process_images(
                 print(error_msg)
                 skipped_images.append((image_path, error_msg))
                 continue
-    
-    # Print information about skipped images
+
     if skipped_images:
         print("\nSkipped images:")
         for img_path, error in skipped_images:
             print(f"- {img_path}: {error}")
-
 def main():
     set_global_seed(42)
     try:

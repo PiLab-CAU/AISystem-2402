@@ -8,28 +8,40 @@ import numpy as np
 import torch
 from models.clip_model import EnhancedCLIPModel
 
-class EnsembleAnomalyDetector:
-    def __init__(self, model: EnhancedCLIPModel, thresholds: List[float] = [0.15, 0.2, 0.25]):
+from typing import Dict, List, Tuple
+import torch
+import numpy as np
+from models.clip_model import EnhancedCLIPModel
+from .adaptive_threshold import AdaptiveThresholdManager
+
+class EnhancedEnsembleAnomalyDetector:
+    def __init__(
+        self, 
+        model: EnhancedCLIPModel,
+        thresholds: List[float] = [0.15, 0.2, 0.25],
+        window_size: int = 100,
+        adaptation_rate: float = 0.1
+    ):
         """
-        여러 임계값과 특성을 가진 detector들의 앙상블
-        
         Args:
             model: CLIP 모델 인스턴스
-            thresholds: 각 detector의 임계값 리스트
+            thresholds: 초기 임계값 리스트
+            window_size: 적응을 위한 관찰 윈도우 크기
+            adaptation_rate: 임계값 조정 속도 (0-1)
         """
         self.model = model
-        self.thresholds = thresholds
+        self.threshold_manager = AdaptiveThresholdManager(
+            base_thresholds=thresholds,
+            window_size=window_size,
+            adaptation_rate=adaptation_rate
+        )
         self.class_embeddings = None
         self.anomaly_embeddings = None
         self.weights = None
-        
-    def prepare(self, normal_samples: Dict[str, List[str]]) -> None:
-        """기본 임베딩 준비"""
-        self.class_embeddings = self._compute_class_embeddings(normal_samples)
-        self.anomaly_embeddings = self._generate_anomaly_embeddings(normal_samples)
-        # 초기 가중치는 동일하게 설정
-        self.weights = [1.0 / len(self.thresholds)] * len(self.thresholds)
-
+        self.current_category = None
+        # 기존 코드와의 호환성을 위해 thresholds 속성 추가
+        self.thresholds = thresholds
+    
     def _compute_ensemble_score(
         self, 
         image_features: torch.Tensor
@@ -47,8 +59,12 @@ class EnsembleAnomalyDetector:
         ensemble_normal_sims = []
         ensemble_anomaly_sims = []
         
+        # 현재 카테고리의 임계값 가져오기
+        current_thresholds = (self.threshold_manager.get_thresholds(self.current_category) 
+                            if self.current_category else self.thresholds)
+        
         # 각 임계값별로 스코어 계산
-        for threshold, weight in zip(self.thresholds, self.weights):
+        for threshold, weight in zip(current_thresholds, self.weights):
             try:
                 normal_similarities = []
                 for class_embedding in self.class_embeddings.values():
@@ -106,11 +122,17 @@ class EnsembleAnomalyDetector:
             if any(x is None for x in [score, normal_sim, anomaly_sim]):
                 raise ValueError("Failed to compute ensemble score")
             
+            # 현재 카테고리의 임계값 가져오기
+            current_thresholds = (self.threshold_manager.get_thresholds(self.current_category) 
+                                if self.current_category else self.thresholds)
+            
             # 앙상블 기반 최종 판정
-            # 각 detector의 판정을 종합하여 최종 결정
-            anomaly_votes = sum(1 for threshold in self.thresholds 
+            anomaly_votes = sum(1 for threshold in current_thresholds 
                               if score < threshold)
-            is_anomaly = anomaly_votes >= len(self.thresholds) / 2
+            is_anomaly = anomaly_votes >= len(current_thresholds) / 2
+            
+            optimal_threshold = (self.threshold_manager.get_optimal_threshold(self.current_category)
+                               if self.current_category else np.mean(self.thresholds))
             
             return {
                 'predicted_label': 'anomaly' if is_anomaly else 'normal',
@@ -118,8 +140,9 @@ class EnsembleAnomalyDetector:
                 'normal_similarity': float(normal_sim),
                 'anomaly_similarity': float(anomaly_sim),
                 'is_anomaly': is_anomaly,
-                'threshold': float(np.mean(self.thresholds)),  # 평균 임계값
-                'anomaly_votes': anomaly_votes
+                'threshold': float(optimal_threshold),
+                'anomaly_votes': anomaly_votes,
+                'category': self.current_category
             }
             
         except Exception as e:
@@ -131,30 +154,39 @@ class EnsembleAnomalyDetector:
                 'anomaly_similarity': 0.0,
                 'is_anomaly': True,
                 'threshold': float(np.mean(self.thresholds)),
-                'anomaly_votes': 0
+                'anomaly_votes': 0,
+                'category': self.current_category
             }
     
-    def update_weights(self, validation_results: List[Dict]) -> None:
+    def prepare(self, normal_samples: Dict[str, List[str]]) -> None:
+        """기본 임베딩 준비 및 카테고리 설정"""
+        self.class_embeddings = self._compute_class_embeddings(normal_samples)
+        self.anomaly_embeddings = self._generate_anomaly_embeddings(normal_samples)
+        # 초기 가중치는 동일하게 설정
+        self.weights = [1.0 / 3] * 3  # 3개의 임계값 사용
+        
+        # 첫 번째 카테고리를 현재 카테고리로 설정
+        if normal_samples:
+            self.current_category = list(normal_samples.keys())[0]
+    
+    def set_category(self, category: str) -> None:
+        """현재 처리할 카테고리 설정"""
+        self.current_category = category
+    
+    def update_threshold(self, score: float, true_label: str) -> None:
         """
-        검증 결과를 기반으로 가중치 업데이트
+        예측 결과를 바탕으로 임계값 업데이트
         
         Args:
-            validation_results: 검증 데이터에 대한 예측 결과 리스트
+            score: 이상 점수
+            true_label: 실제 레이블 ('normal' 또는 'anomaly')
         """
-        if not validation_results:
-            return
-            
-        accuracies = []
-        for threshold in self.thresholds:
-            correct = sum(1 for result in validation_results 
-                        if (result['anomaly_score'] < threshold) == result['is_anomaly'])
-            accuracy = correct / len(validation_results)
-            accuracies.append(accuracy)
-        
-        # 정확도 기반 가중치 계산
-        total_accuracy = sum(accuracies)
-        if total_accuracy > 0:
-            self.weights = [acc / total_accuracy for acc in accuracies]
+        if self.current_category is not None:
+            self.threshold_manager.update_scores(
+                self.current_category,
+                score,
+                true_label
+            )
 
     def _compute_class_embeddings(
         self, 

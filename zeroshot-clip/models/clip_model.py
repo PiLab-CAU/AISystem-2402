@@ -35,3 +35,15 @@ class CLIPModel:
         with torch.no_grad():
             features = self.model.encode_image(image)
             return features / features.norm(dim=-1, keepdim=True)
+        
+
+if __name__ == '__main__':
+    model = CLIPModel('cuda:0')
+
+    x = torch.randn(3,224,224).unsqueeze(0).to(model.device)
+    print(x.shape)
+    
+    #print(model)
+    #print(model.preprocess)
+    print(model.device)
+    print(model.extract_features(x).min(), model.extract_features(x).max())

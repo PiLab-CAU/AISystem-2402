@@ -24,8 +24,10 @@ class AnomalyDetector:
         
         Args:
             normal_samples: Dictionary containing paths of normal images for each class
+
         """
-        self.class_embeddings = self._compute_class_embeddings(normal_samples)
+        # normal_samples : {'Calculator':[], 'Candle':[],,,}
+        self.class_embeddings = self._compute_class_embeddings(normal_samples)   # normal class에 대한 class 별 평균 embedding 계산
         self.anomaly_embeddings = self._generate_anomaly_embeddings(normal_samples)
 
     def predict(self, image: torch.Tensor) -> Dict:
@@ -159,14 +161,14 @@ class AnomalyDetector:
                 raise ValueError("Embeddings not initialized. Call prepare() first.")
                 
             normal_similarities = []
-            for class_embedding in self.class_embeddings.values():
+            for class_embedding in self.class_embeddings.values(): # normal 클래스 별 평균 embedding
                 similarity = torch.cosine_similarity(image_features, class_embedding)
                 normal_similarities.append(similarity.item())
                 
             if not normal_similarities:
                 raise ValueError("No normal similarities computed")
                 
-            max_normal_similarity = max(normal_similarities)
+            max_normal_similarity = max(normal_similarities) # normal 클래스 중에 가장 유사한 class 찾기
             
             anomaly_similarities = torch.cosine_similarity(
                 image_features.expand(self.anomaly_embeddings.shape[0], -1),

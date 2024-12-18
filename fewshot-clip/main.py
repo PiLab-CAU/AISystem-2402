@@ -43,9 +43,9 @@ def train_model(train_loader, model, criterion, optimizer, device):
     print(f"Train Loss: {avg_loss:.4f}, Train Accuracy: {accuracy:.2f}%")
     return avg_loss, accuracy
 
-def evaluate_model(test_loader, model, device):
-    print(f'evaluate ::: {device}')
-    
+
+
+def evaluate_model(test_loader, model, device):    
     model.eval()  # Set model to evaluation mode
     correct = 0
     total = 0
@@ -64,12 +64,21 @@ def evaluate_model(test_loader, model, device):
     print(f'Accuracy on test images: {accuracy:.2f}%')
     return accuracy
 
+
+
+
+
+
 def main():
     # Set device (GPU if available, otherwise CPU)
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+    ## @@@@@@@@@@@@@@
+    batch_size = 20
+    print(f'@@@@@@@@@@@@ Batch: {batch_size}')
     
     # Initialize data loaders and model
-    train_loader, test_loader = get_data_loader("./train", "./test", batch_size=4)
+    train_loader, test_loader = get_data_loader("./train", "./test", batch_size=batch_size)
     model = load_clip_model(device)
 
     # Define loss function and optimizer
@@ -96,6 +105,12 @@ def main():
             os.makedirs("saved_models", exist_ok=True)
             torch.save(model.state_dict(), model_save_path)
             print(f"Model saved at {model_save_path} with accuracy: {best_accuracy:.2f}%")
+
+
+
+
+
+
 
 if __name__ == "__main__":
     print("cuda:0" if torch.cuda.is_available() else "cpu")

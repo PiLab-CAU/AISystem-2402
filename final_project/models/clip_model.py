@@ -26,7 +26,7 @@ class EnhancedCLIPModel:
         Returns:
             tuple: (model, preprocess_function)
         """
-        model, preprocess = clip.load('ViT-L/14', self.device)
+        model, preprocess = clip.load('ViT-B/32', self.device)
         model = model.float()
         return model, preprocess
     

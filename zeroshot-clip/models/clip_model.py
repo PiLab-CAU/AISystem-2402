@@ -19,7 +19,7 @@ class CLIPModel:
         Returns:
             tuple: (model, preprocess_function)
         """
-        model, preprocess = clip.load('ViT-B/32', self.device)
+        model, preprocess = clip.load('ViT-B/16', self.device)
         return model, preprocess
     
     def extract_features(self, image: torch.Tensor) -> torch.Tensor:
@@ -35,3 +35,24 @@ class CLIPModel:
         with torch.no_grad():
             features = self.model.encode_image(image)
             return features / features.norm(dim=-1, keepdim=True)
+        
+    def extract_text_features(self, text):
+            tokenized_text = clip.tokenize(text).to(self.device)
+            with torch.no_grad():
+                features = self.model.encode_text(tokenized_text)
+            return features / features.norm(dim=-1, keepdim=True)
+        
+        
+        
+        
+
+if __name__ == '__main__':
+    model = CLIPModel('cuda:0')
+
+    x = torch.randn(3,224,224).unsqueeze(0).to(model.device)
+    print(x.shape)
+    
+    #print(model)
+    #print(model.preprocess)
+    print(model.device)
+    print(model.extract_features(x).min(), model.extract_features(x).max())

@@ -3,9 +3,11 @@ from typing import Dict, List, Tuple
 from PIL import Image
 from tqdm import tqdm
 from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
+from augmentation_type import augmentation_circle, augmentation_square, augmentation_rectangle_light
+import numpy as np
 
 class AnomalyDetector:
-    def __init__(self, model, threshold: float = 0.2):
+    def __init__(self, model, threshold: float = 0.25):
         """
         Initialize anomaly detector.
         
@@ -28,6 +30,9 @@ class AnomalyDetector:
         self.class_embeddings = self._compute_class_embeddings(normal_samples)
         self.anomaly_embeddings = self._generate_anomaly_embeddings(normal_samples)
 
+
+
+
     def predict(self, image: torch.Tensor) -> Dict:
         """
         Predict whether an image is anomalous.
@@ -48,6 +53,8 @@ class AnomalyDetector:
                 raise ValueError("Failed to compute anomaly score")
                 
             is_anomaly = score < self.threshold
+
+
             
             return {
                 'predicted_label': 'anomaly' if is_anomaly else 'normal',
@@ -69,6 +76,33 @@ class AnomalyDetector:
                 'is_anomaly': True,
                 'threshold': float(self.threshold)
             }
+        
+    '''
+    def _compute_text_embeddings(self) -> torch.Tensor:
+        prompts_normal = [
+    "A photo of a clean obect"
+]
+
+        prompts_abnormal = [
+    "A photo of a damaged object"
+]
+
+        
+        # Normal prompts embeddings
+        text_inputs_normal = torch.cat([clip.tokenize(prompt) for prompt in prompts_normal]).to(self.model.device)
+        with torch.no_grad():
+            text_features_normal = self.model.model.encode_text(text_inputs_normal)
+            text_features_normal = text_features_normal / text_features_normal.norm(dim=-1, keepdim=True)
+
+        # Abnormal prompts embeddings
+        text_inputs_abnormal = torch.cat([clip.tokenize(prompt) for prompt in prompts_abnormal]).to(self.model.device)
+        with torch.no_grad():
+            text_features_abnormal = self.model.model.encode_text(text_inputs_abnormal)
+            text_features_abnormal = text_features_abnormal / text_features_abnormal.norm(dim=-1, keepdim=True)
+
+        return text_features_normal, text_features_abnormal
+    '''
+    
 
     def _compute_class_embeddings(
         self, 
@@ -116,7 +150,7 @@ class AnomalyDetector:
             samples_dict: Dictionary of normal sample paths
             n_anomalies_per_class: Number of anomaly samples to generate per class
             
-        Returns:
+        Returns: 
             torch.Tensor: Tensor of anomaly embeddings
         """
         anomaly_embeddings = []
@@ -127,11 +161,15 @@ class AnomalyDetector:
             for img_path in image_paths[:n_anomalies_per_class]:
                 try:
                     image = Image.open(img_path).convert('RGB')
-                    anomaly_image = augmenter.generate_anomaly(image)
-                    
-                    image_input = self.model.preprocess(anomaly_image).unsqueeze(0).to(self.model.device)
-                    features = self.model.extract_features(image_input)
-                    anomaly_embeddings.append(features)
+                    abnormal_augmentation = [augmentation_circle, augmentation_square, augmentation_rectangle_light]
+
+                    for aug_func in abnormal_augmentation:
+                        anomaly_image = aug_func(image)
+                    #anomaly_image = augmenter.generate_anomaly(image)
+                
+                        image_input = self.model.preprocess(anomaly_image).unsqueeze(0).to(self.model.device)
+                        features = self.model.extract_features(image_input)
+                        anomaly_embeddings.append(features)
                 except Exception as e:
                     print(f"Error generating anomaly for {img_path}: {str(e)}")
                     continue
@@ -180,3 +218,4 @@ class AnomalyDetector:
         except Exception as e:
             print(f"Error in compute_anomaly_score: {str(e)}")
             return None, None, None
+        

@@ -1,5 +1,6 @@
 import torch
 import clip
+from typing import List
 
 class CLIPModel:
     def __init__(self, device: str):
@@ -35,3 +36,10 @@ class CLIPModel:
         with torch.no_grad():
             features = self.model.encode_image(image)
             return features / features.norm(dim=-1, keepdim=True)
+        
+    def combine_features(self, features_list: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Combine features using mean pooling.
+        """
+        combined = torch.mean(torch.stack(features_list), dim = 0)
+        return combined / combined.norm(dim = -1, keepdim = True)

@@ -10,5 +10,5 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy project files
-COPY . /workspace/
+COPY . /zeroshot-clip/workspace/
 

@@ -3,9 +3,12 @@ from typing import Dict, List, Tuple
 from PIL import Image
 from tqdm import tqdm
 from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
+from sklearn.decomposition import PCA
+import numpy as np
+from utils.metrics import PerformanceEvaluator
 
 class AnomalyDetector:
-    def __init__(self, model, threshold: float = 0.2):
+    def __init__(self, model, threshold: float = 0.2, use_pca: bool = False, pca_componenets: int = 128):
         """
         Initialize anomaly detector.
         
@@ -17,6 +20,8 @@ class AnomalyDetector:
         self.threshold = threshold
         self.class_embeddings = None
         self.anomaly_embeddings = None
+        self.use_pca = use_pca
+        self.pca = PCA(n_components=pca_componenets) if use_pca else None
         
     def prepare(self, normal_samples: Dict[str, List[str]]) -> None:
         """
@@ -27,6 +32,46 @@ class AnomalyDetector:
         """
         self.class_embeddings = self._compute_class_embeddings(normal_samples)
         self.anomaly_embeddings = self._generate_anomaly_embeddings(normal_samples)
+
+        if self.use_pca:
+            combined_embeddings = torch.cat(list(self.class_embeddings.values()) + [self.anomaly_embeddings], dim = 0)
+            reduced = self.pca.fit_transform(combined_embeddings.cpu().numpy())
+            reduced_tensor = torch.tensor(reduced, device = self.model.device)
+
+            idx = 0
+            for key in self.class_embeddings.keys():
+                self.class_embeddings[key] = reduced_tensor[idx:idx + 1]
+                idx += 1
+            self.anomaly_embeddings = reduced_tensor[idx:]
+
+    def optimize_threshold(self, validation_data: Dict[str, List[str]]) -> None:
+        """
+        Optimize anomaly detection threshold using validation data.
+
+        Args:
+            validation_data: Validation dataset with true labels
+        """
+        best_threshold = 0.2
+        best_f1 = 0.0
+
+        thresholds = [i * 0.01 for i in range(10, 50)]  # 0.1 ~ 0.5 탐색
+        for threshold in thresholds:
+            self.threshold = threshold
+            evaluator = PerformanceEvaluator()
+
+            for label, images in validation_data.items():
+                for img_path in images:
+                    image = Image.open(img_path).convert('RGB')
+                    image_input = self.model.preprocess(image).unsqueeze(0).to(self.model.device)
+                    prediction = self.predict(image_input)
+                    evaluator.add_result(label, prediction)
+
+            metrics = evaluator.compute_metrics()
+            if metrics['f1_score'] > best_f1:
+                best_f1 = metrics['f1_score']
+                best_threshold = threshold
+
+        self.threshold = best_threshold
 
     def predict(self, image: torch.Tensor) -> Dict:
         """
@@ -42,8 +87,12 @@ class AnomalyDetector:
             features = self.model.extract_features(image)
             if features is None:
                 raise ValueError("Failed to extract features from image")
+
+            if self.use_pca:
+                features = torch.tensor(self.pca.transform(features.cpu().numpy()), device = self.model.device)
                 
             score, normal_sim, anomaly_sim = self._compute_anomaly_score(features)
+            
             if any(x is None for x in [score, normal_sim, anomaly_sim]):
                 raise ValueError("Failed to compute anomaly score")
                 

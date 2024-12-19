@@ -211,21 +211,9 @@ The leaderboard is updated **daily at midnight (00:00 KST)**.
 Ensure your submissions are finalized by **23:59 KST** to be included in the next update.
 
 
-| Rank | Name             | Overall Score | Submission Count | Submission Date     |
-|------|------------------|---------------|------------------|---------------------|
-| 1    | zxcv3296    | 60.32%        | 1                | 2024-12-06 12:09 |
-| 2    | sumin819 | 56.67%      | 4                | 2024-12-18 18:11  |
-| 3    | **Baseline Model 2**  | **55.15%**    | 1                | 2024-12-13 17:10  |
-| 4    | nshuhsn  | 55.07%     | 1                | 2024-12-13 13:06  |
-| 5    | imsongpasimin    | 54.12%        | 3                | 2024-12-18 21:12 |
-| 6    | koallako   | 52.23%        | 4                | 2024-12-16 22:13 |
-| 7    | burugi  | 52.18%      | 3                | 2024-12-12 20:07  |
-| 8    | IvanDelafuys  | 50.88%      | 1                | 2024-12-16 02:10  |
-| 9    | **Baseline Model 1**  | **50.65%**      | 1                | - |
-| 10   | malinakmichal   |  50.42%        | 2                | 2024-12-16 21:45 |
-| 11   | vavarier   | 50.18%        | 1                | 2024-12-12 14:33 |
-| 12   | Artyste8038-fr   | 49.85%        | 1                | 2024-12-17 19:15 |
-
+| Rank |  Name       | Submission Count | Overall Score | Precision | Recall | F1 Score |
+|------|-----------------|------------------|---------------|-----------|--------|----------|
+| 1    | Baseline Model      | 1                | 50.65%        | 51.00%    | 33.10% | 40.15%   |
 
 
 

@@ -7,6 +7,9 @@ import random
 import math
 import numpy as np
 
+import augmentation_type
+
+
 
 
 
@@ -46,21 +49,25 @@ class CustomDataset(Dataset):
                     self.image_paths.append(image_path)
                 
         print(f"Found {len(self.image_paths)} images")
-        if self.mode == 'test':
-            print(f'                  @@ anomaly: {len(os.listdir(os.path.join(root_dir, "anomaly")))}')
-            print(f'                  @@  normal: {len(os.listdir(os.path.join(root_dir, "normal")))}')
+
 
         if len(self.image_paths) > 0:
             print(f"Sample image path: {self.image_paths[0]}")
 
+###############  len  ######################
+
     def __len__(self):
         if self.mode == "test" or not self.transform:
             return len(self.image_paths)
-        return len(self.image_paths) * 2
+        return len(self.image_paths) * 3
+    
+###############  get_item  ######################
 
     def __getitem__(self, idx):
         num_original_images = len(self.image_paths)
+
         
+                 
         if self.mode == "test" or idx < num_original_images:
             image_path = self.image_paths[idx % num_original_images]
             image = Image.open(image_path).convert("RGB")
@@ -77,11 +84,20 @@ class CustomDataset(Dataset):
             return image, label
         
         else:  # Transformed images in training mode
-            image_path = self.image_paths[idx - num_original_images]
+
+            augmentation_type = idx % num_original_images
+            image_path = self.image_paths[augmentation_type]
             image = Image.open(image_path).convert("RGB")
             
             if self.transform: # anomaly ? 
-                image = self.transform(image)
+                if augmentation_type == 0:
+                    image = self.transform.transform(image=image, augmentation_type=0)
+
+                if augmentation_type == 1:
+                    image = self.transform.transform(image=image, augmentation_type=1)
+
+                if augmentation_type == 2:
+                    image = self.transform.transform(image=image, augmentation_type=2)
             
             return image, 1  # transformed image is anomaly
         
@@ -104,12 +120,17 @@ def get_data_loader(train_dir, test_dir, batch_size):
         transforms.ToTensor()
     ])
     
+    """
     anomaly_transform = transforms.Compose([
         transforms.Resize((224, 224)),
-        #transforms.RandomHorizontalFlip(p=1.0),
-        #transforms.ColorJitter(brightness=0.5),
+        transforms.RandomHorizontalFlip(p=1.0),
+        transforms.ColorJitter(brightness=0.5),
         transforms.ToTensor()
     ])
+    """
+
+    anomaly_transform = augmentation_type.anomaly_transform()
+
     
     train_dataset = CustomDataset(
         train_dir, 

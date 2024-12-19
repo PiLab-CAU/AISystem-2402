@@ -74,8 +74,9 @@ def process_images(
         config: Configuration object
     """
     skipped_images = []
+    test_images = {i:j[:20] for i, j in test_images.items() if i=='anomaly'}
     
-    for true_label, image_paths in test_images.items():
+    for idx, (true_label, image_paths) in enumerate(test_images.items()):
         for image_path in tqdm(image_paths, desc=f"Processing {true_label} images"):
             try:
                 # Load image
@@ -87,6 +88,9 @@ def process_images(
                 prediction = detector.predict(image)
                 if prediction['predicted_label'] == 'error':
                     raise ValueError("Prediction failed")
+                
+                print(true_label[0].upper(), '|', prediction['predicted_label'][0].upper(), '|', 'Normal', prediction['normal_similarity'], '|', 'Abnormal', prediction['anomaly_similarity'])
+                print()
                     
                 # Save results
                 evaluator.add_result(true_label, prediction)
@@ -138,7 +142,7 @@ def main():
         
         # Prepare detector
         print("Preparing anomaly detector...")
-        detector.prepare(normal_samples)
+        detector.prepare()
         
         # Process test images
         print("Processing test images...")

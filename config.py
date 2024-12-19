@@ -9,7 +9,7 @@ class Config:
     results_path: str = "./results"
     
     # Model parameters
-    anomaly_threshold: float = 0.01
+    anomaly_threshold: float = 0.2
     n_samples: int = 5
     
     # Runtime settings

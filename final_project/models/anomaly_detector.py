@@ -12,7 +12,7 @@ from typing import Dict, List, Tuple
 import torch
 import numpy as np
 from models.clip_model import EnhancedCLIPModel
-from .adaptive_threshold import AdaptiveThresholdManager
+from .adaptive_threshold import EnhancedAdaptiveThresholdManager
 
 class EnhancedEnsembleAnomalyDetector:
     def __init__(
@@ -30,7 +30,7 @@ class EnhancedEnsembleAnomalyDetector:
             adaptation_rate: 임계값 조정 속도 (0-1)
         """
         self.model = model
-        self.threshold_manager = AdaptiveThresholdManager(
+        self.threshold_manager = EnhancedAdaptiveThresholdManager(
             base_thresholds=thresholds,
             window_size=window_size,
             adaptation_rate=adaptation_rate

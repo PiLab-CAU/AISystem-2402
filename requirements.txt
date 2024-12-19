@@ -4,4 +4,4 @@ Pillow
 matplotlib
 tqdm
 dataclasses
-openai-clip
+openai-clip 

@@ -24,12 +24,6 @@ class AnomalyDetector:
         self.pca = PCA(n_components=pca_componenets) if use_pca else None
         
     def prepare(self, normal_samples: Dict[str, List[str]]) -> None:
-        """
-        Prepare the detector by computing necessary embeddings.
-        
-        Args:
-            normal_samples: Dictionary containing paths of normal images for each class
-        """
         self.class_embeddings = self._compute_class_embeddings(normal_samples)
         self.anomaly_embeddings = self._generate_anomaly_embeddings(normal_samples)
 
@@ -44,34 +38,32 @@ class AnomalyDetector:
                 idx += 1
             self.anomaly_embeddings = reduced_tensor[idx:]
 
-    def optimize_threshold(self, validation_data: Dict[str, List[str]]) -> None:
-        """
-        Optimize anomaly detection threshold using validation data.
-
-        Args:
-            validation_data: Validation dataset with true labels
-        """
+    def find_optimal_threshold(self, validation_data: Dict[str, List[str]]) -> float:
         best_threshold = 0.2
-        best_f1 = 0.0
+        best_accuracy = 0
+        thresholds = np.linspace(0.1, 0.9, 50)
 
-        thresholds = [i * 0.01 for i in range(10, 50)]  # 0.1 ~ 0.5 탐색
         for threshold in thresholds:
             self.threshold = threshold
-            evaluator = PerformanceEvaluator()
+            correct_predictions = 0
+            total_predictions = 0
 
-            for label, images in validation_data.items():
-                for img_path in images:
-                    image = Image.open(img_path).convert('RGB')
+            for true_label, image_paths in validation_data.items():
+                for image_path in image_paths:
+                    image = Image.open(image_path).convert('RGB')
                     image_input = self.model.preprocess(image).unsqueeze(0).to(self.model.device)
                     prediction = self.predict(image_input)
-                    evaluator.add_result(label, prediction)
+                    total_predictions += 1
+                    if prediction['predicted_label'] == true_label:
+                        correct_predictions += 1
 
-            metrics = evaluator.compute_metrics()
-            if metrics['f1_score'] > best_f1:
-                best_f1 = metrics['f1_score']
+            accuracy = correct_predictions / total_predictions
+            if accuracy > best_accuracy:
+                best_accuracy = accuracy
                 best_threshold = threshold
 
         self.threshold = best_threshold
+        return best_threshold
 
     def predict(self, image: torch.Tensor) -> Dict:
         """

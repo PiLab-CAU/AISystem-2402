@@ -43,3 +43,4 @@ class CLIPModel:
         """
         combined = torch.mean(torch.stack(features_list), dim = 0)
         return combined / combined.norm(dim = -1, keepdim = True)
+        

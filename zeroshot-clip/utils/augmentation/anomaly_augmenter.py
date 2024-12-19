@@ -5,7 +5,27 @@ from .base import BaseAugmentation
 from .noise import GaussianNoise
 from .geometric import LocalDeformation
 from .color import ColorDistortion
+from PIL import ImageDraw
 
+class MakeCircle(BaseAugmentation) :
+    def __call__(self, image: Image.Image) -> Image.Image:
+        img = image.copy()
+        draw = ImageDraw.Draw(img)
+        
+        num_circles = np.random.randint(5, 15)
+        for _ in range(num_circles):
+            center_x = np.random.randint(0, img.width)
+            center_y = np.random.randint(0, img.height)
+            radius = np.random.randint(1, 3)
+            color = tuple(np.random.randint(0, 255, size = 3))
+
+            draw.ellipse(
+                [center_x - radius, center_y - radius, center_x + radius, center_y + radius],
+                fill = color
+            )
+
+        return img
+    
 class RandomDeletion(BaseAugmentation):
     def __call__(self, image: Image.Image) -> Image.Image:
         img_np = np.array(image)
@@ -27,7 +47,8 @@ class AnomalyAugmenter:
             GaussianNoise(severity),
             LocalDeformation(severity),
             ColorDistortion(severity),
-            RandomDeletion(severity)
+            RandomDeletion(severity),
+            MakeCircle()
         ]
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:

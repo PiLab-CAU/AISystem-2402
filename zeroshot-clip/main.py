@@ -13,20 +13,16 @@ from utils.data_loader import (
 )
 
 from utils.metrics import PerformanceEvaluator
-from utils.visualization import save_predictions
+# from utils.visualization import save_predictions
 from config import Config
 
 def setup_environment(config: Config) -> Tuple[str, str, str]:
-    """
-    Setup execution environment and paths.
-    
-    Args:
-        config: Configuration object containing parameters
-        
-    Returns:
-        Tuple[str, str, str]: Device, train path, and test path
-    """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if torch.backends.mps.is_available():
+        device = "mps"
+    elif torch.cuda.is_available():
+        device = "cuda"
+    else:
+        device = "cpu"
     print(f"Using device: {device}")
     
     train_path = config.train_path
@@ -51,10 +47,7 @@ def initialize_models(device: str, config: Config) -> Tuple[CLIPModel, AnomalyDe
         Tuple[CLIPModel, AnomalyDetector]: Initialized models
     """
     clip_model = CLIPModel(device)
-    detector = AnomalyDetector(
-        model=clip_model,
-        threshold=config.anomaly_threshold
-    )
+    detector = AnomalyDetector(model=clip_model)  # threshold 파라미터 제거
     
     return clip_model, detector
 
@@ -64,15 +57,7 @@ def process_images(
     evaluator: PerformanceEvaluator,
     config: Config
 ) -> None:
-    """
-    Process test images and evaluate results.
-    
-    Args:
-        detector: Anomaly detector model
-        test_images: Dictionary of test image paths
-        evaluator: Performance evaluator
-        config: Configuration object
-    """
+
     skipped_images = []
     
     for true_label, image_paths in test_images.items():
@@ -92,13 +77,13 @@ def process_images(
                 evaluator.add_result(true_label, prediction)
                 
                 # Save visualization
-                if config.save_predictions:
-                    save_predictions(
-                        image_path=image_path,
-                        true_label=true_label,
-                        **prediction,
-                        save_dir=config.results_path
-                    )
+                # if config.save_predictions:
+                #     save_predictions(
+                #         image_path=image_path,
+                #         true_label=true_label,
+                #         **prediction,
+                #         save_dir=config.results_path
+                #     )
                     
             except Exception as e:
                 error_msg = f"Error processing image {image_path}: {str(e)}"

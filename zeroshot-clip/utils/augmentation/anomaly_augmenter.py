@@ -1,42 +1,32 @@
 import numpy as np
 from PIL import Image
-from typing import List
-from .base import BaseAugmentation
-from .noise import GaussianNoise
-from .geometric import LocalDeformation
-from .color import ColorDistortion
-
-class RandomDeletion(BaseAugmentation):
-    def __call__(self, image: Image.Image) -> Image.Image:
-        img_np = np.array(image)
-        height, width = img_np.shape[:2]
-        
-        num_patches = np.random.randint(1, 4)
-        for _ in range(num_patches):
-            x = np.random.randint(0, width - width//4)
-            y = np.random.randint(0, height - height//4)
-            patch_w = np.random.randint(width//8, width//4)
-            patch_h = np.random.randint(height//8, height//4)
-            img_np[y:y+patch_h, x:x+patch_w] = 0
-            
-        return Image.fromarray(img_np)
+from typing import Optional
+from .geometric import LocalDeformation, RandomDeletion, RandomCuts
+from .noise import GaussianNoise, TextureCorruption
+from .color import RedDotAnomaly, PatternInjection, ColorDistortion
 
 class AnomalyAugmenter:
-    def __init__(self, severity: float = 0.7):
-        self.augmentations: List[BaseAugmentation] = [
-            GaussianNoise(severity),
-            LocalDeformation(severity),
-            ColorDistortion(severity),
-            RandomDeletion(severity)
-        ]
-    
-    def generate_anomaly(self, image: Image.Image) -> Image.Image:
-        # Generate anomaly images by combining multiple augmentations
-        num_augs = np.random.randint(2, 4)
-        selected_augs = np.random.choice(self.augmentations, num_augs, replace=False)
+    def __init__(self, severity: float = 0.5):
+        self.severity = severity
+        self.rng = np.random.RandomState(42)
         
-        img = image
-        for aug in selected_augs:
-            img = aug(img)
+        self.augmentations = {
+            'pattern_injection': (PatternInjection(severity * 1.4), 0.3), 
+            'red_dot': (RedDotAnomaly(severity * 1.5), 0.15),          
+            'texture_corruption': (TextureCorruption(severity * 1.4), 0.15), 
+            'random_deletion': (RandomDeletion(severity * 1.3), 0.15),    
+            'random_cuts': (RandomCuts(severity * 1.3), 0.15),            
+            'local_deformation': (LocalDeformation(severity * 1.2), 0.05),
+            'gaussian_noise': (GaussianNoise(severity * 1.3), 0.05)    
+        }
+    
+    def generate_anomaly(self, image: Image.Image) -> Optional[Image.Image]:
+        try:
+            img = image.copy()
+            augmentations, weights = zip(*self.augmentations.values())
+            selected_aug = self.rng.choice(augmentations, p=weights)
+            return selected_aug(img)
             
-        return img
+        except Exception as e:
+            print(f"Error in anomaly generation: {str(e)}")
+            return image

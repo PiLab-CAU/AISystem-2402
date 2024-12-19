@@ -7,6 +7,9 @@ class Config:
     train_path: str = "./train"
     test_path: str = "./test"
     results_path: str = "./results"
+    # train_path: str = "/Users/kimhaeseong/AISystem-2402/zeroshot-clip/train"
+    # test_path: str = "/Users/kimhaeseong/AISystem-2402/zeroshot-clip/test"
+    # results_path: str = "/Users/kimhaeseong/AISystem-2402/zeroshot-clip/results"
     
     # Model parameters
     anomaly_threshold: float = 0.2

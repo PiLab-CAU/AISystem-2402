@@ -2,6 +2,10 @@ import os
 import matplotlib.pyplot as plt
 from PIL import Image
 
+import os
+# import matplotlib.pyplot as plt  # 불필요한 import 제거
+# from PIL import Image  # 불필요한 import 제거
+
 def save_predictions(
     image_path: str,
     true_label: str,
@@ -14,7 +18,8 @@ def save_predictions(
     save_dir: str = "./results"
 ) -> None:
     """
-    Save the image with its prediction details.
+    Dummy function that skips all visualization and saving operations.
+    All parameters are kept for compatibility with the original function signature.
     
     Args:
         image_path: Path to the input image
@@ -27,6 +32,9 @@ def save_predictions(
         is_anomaly: Whether the image was classified as anomaly
         save_dir: Directory to save the results (default: "./results")
     """
+    return None  # 모든 연산 건너뛰기
+    """
+    # 아래 코드 전체 주석 처리
     try:
         # Create save directory if it doesn't exist
         os.makedirs(save_dir, exist_ok=True)
@@ -75,7 +83,72 @@ def save_predictions(
         
     except Exception as e:
         print(f"Error saving visualization for {image_path}: {str(e)}")
+    """
 
+def plot_predictions(
+    image_path: str,
+    true_label: str,
+    predicted_label: str,
+    anomaly_score: float,
+    normal_similarity: float,
+    anomaly_similarity: float,
+    threshold: float,
+    is_anomaly: bool
+) -> None:
+    """
+    Dummy function that skips all plotting operations.
+    All parameters are kept for compatibility.
+    
+    Args:
+        image_path: Path to the input image
+        true_label: Ground truth label
+        predicted_label: Predicted label
+        anomaly_score: Computed anomaly score
+        normal_similarity: Similarity with normal class
+        anomaly_similarity: Similarity with anomaly class
+        threshold: Threshold used for classification
+        is_anomaly: Whether the image was classified as anomaly
+    """
+    return None  # 모든 연산 건너뛰기
+    """
+    # 아래 코드 전체 주석 처리
+    try:
+        # Read the image
+        image = Image.open(image_path)
+        
+        # Create figure with two subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Plot image
+        ax1.imshow(image)
+        ax1.axis('off')
+        ax1.set_title('Image')
+        
+        # Create text box with prediction details
+        text = (
+            f"Prediction Details\n"
+            f"True Label: {true_label}\n"
+            f"Predicted Label: {predicted_label}\n"
+            f"Anomaly Score: {anomaly_score:.3f}\n"
+            f"Normal Similarity: {normal_similarity:.3f}\n"
+            f"Anomaly Similarity: {anomaly_similarity:.3f}\n"
+            f"Threshold: {threshold}"
+        )
+        
+        # Display text
+        ax2.text(0.1, 0.5, text, fontsize=10, verticalalignment='center')
+        ax2.axis('off')
+        
+        # Set title color based on prediction correctness
+        title_color = 'green' if predicted_label == true_label else 'red'
+        plt.suptitle(f"Prediction Result", color=title_color, fontsize=14)
+        
+        plt.show()
+        plt.close(fig)
+        
+    except Exception as e:
+        print(f"Error displaying visualization for {image_path}: {str(e)}")
+    """
 def plot_predictions(
     image_path: str,
     true_label: str,

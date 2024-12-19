@@ -1,3 +1,13 @@
+train/
+test/
+dataset/
+saved_models/
+results/
+metrics/
+fewshot-clip/
+zerosho-clip/
+origin/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -63,7 +63,7 @@ def evaluate_model(test_loader, model, device):
 
 def main():
     # Set device (GPU if available, otherwise CPU)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" # if torch.cuda.is_available() else "cpu"
     
     # Initialize data loaders and model
     train_loader, test_loader = get_data_loader("./train", "./test", batch_size=4)

@@ -3,6 +3,43 @@ from typing import Dict, List, Tuple
 from PIL import Image
 from tqdm import tqdm
 from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
+from itertools import combinations
+
+
+def calculate_stats(embeddings):
+    stats = {}
+    all_vectors = []
+
+    for class_name, vectors in embeddings.items():
+        distances = []
+        all_vectors.extend(vectors)
+        for v1, v2 in combinations(vectors, 2):  # All unique pairs
+            dist = torch.norm(v1 - v2, p=2)  # Euclidean distance (L2 norm)
+            distances.append(dist)
+
+        distances = torch.tensor(distances)
+
+        # Calculate mean and standard deviation
+        mean_distance = torch.mean(distances)
+        std_distance = torch.std(distances)
+
+        stats[class_name] = (mean_distance, std_distance)
+
+        print(f"    Class name: {class_name} mean: {mean_distance}, std: {std_distance}")
+
+    distances = []
+    for v1, v2 in combinations(all_vectors, 2):  # All unique pairs
+        dist = torch.norm(v1 - v2, p=2)  # Euclidean distance (L2 norm)
+        distances.append(dist)
+
+    distances = torch.tensor(distances)
+
+    # Calculate mean and standard deviation
+    mean_distance = torch.mean(distances)
+    std_distance = torch.std(distances)
+    print(f"    Summary: mean: {mean_distance}, std: {std_distance}")
+
+    return stats
 
 class AnomalyDetector:
     def __init__(self, model, threshold: float = 0.2):
@@ -17,6 +54,12 @@ class AnomalyDetector:
         self.threshold = threshold
         self.class_embeddings = None
         self.anomaly_embeddings = None
+        self.all_class_embeddings_by_class = {}
+        self.all_anomaly_embeddings_by_class = {}
+
+        # mean a standard deviation of both normal and anomaly vectors
+        self.class_stats = None
+        self.anomaly_stats = None
         
     def prepare(self, normal_samples: Dict[str, List[str]]) -> None:
         """
@@ -27,6 +70,12 @@ class AnomalyDetector:
         """
         self.class_embeddings = self._compute_class_embeddings(normal_samples)
         self.anomaly_embeddings = self._generate_anomaly_embeddings(normal_samples)
+
+        # calculating mean a standard deviation of both normal and anomaly vectors
+        #print("\nNormal class stats:")
+        #self.class_stats = calculate_stats(self.all_class_embeddings_by_class)
+        #print("\nAnomaly class stats:")
+        #self.anomaly_stats = calculate_stats(self.all_anomaly_embeddings_by_class)
 
     def predict(self, image: torch.Tensor) -> Dict:
         """
@@ -99,6 +148,8 @@ class AnomalyDetector:
                     continue
             
             if embeddings:
+                # adding all class embeddings
+                self.all_class_embeddings_by_class[class_name] = embeddings
                 class_embedding = torch.mean(torch.stack(embeddings), dim=0)
                 class_embeddings[class_name] = class_embedding / class_embedding.norm(dim=-1, keepdim=True)
         
@@ -124,6 +175,8 @@ class AnomalyDetector:
         
         for class_name, image_paths in tqdm(samples_dict.items(), 
                                           desc="Generating anomaly embeddings"):
+            # added embedings list to store anomaly embeddings from one class
+            embeddings = []
             for img_path in image_paths[:n_anomalies_per_class]:
                 try:
                     image = Image.open(img_path).convert('RGB')
@@ -131,14 +184,24 @@ class AnomalyDetector:
                     
                     image_input = self.model.preprocess(anomaly_image).unsqueeze(0).to(self.model.device)
                     features = self.model.extract_features(image_input)
-                    anomaly_embeddings.append(features)
+
+                    # appending to embeddings list instead of the global list anomaly_embeddings
+                    embeddings.append(features)
                 except Exception as e:
                     print(f"Error generating anomaly for {img_path}: {str(e)}")
                     continue
+                
+            # extending global list by anomaly embeddings computed for current class
+            anomaly_embeddings.extend(embeddings)
+
+            if embeddings:
+                # adding all class anomaly embeddings
+                self.all_anomaly_embeddings_by_class[class_name] = embeddings
         
         if not anomaly_embeddings:
             raise ValueError("Failed to generate any anomaly embeddings")
             
+        # return tensor of all anomaly embeddings
         return torch.cat(anomaly_embeddings, dim=0)
 
     def _compute_anomaly_score(

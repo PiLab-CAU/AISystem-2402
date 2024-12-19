@@ -30,7 +30,8 @@ class AnomalyAugmenter:
             LocalDeformation(severity),
             ColorDistortion(severity),
             RandomDeletion(severity),
-            transforms.RandomRotation(severity*100)
+            #transforms.RandomRotation(severity*100),
+            #transforms.RandomHorizontalFlip(p=severity)
         ]
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:

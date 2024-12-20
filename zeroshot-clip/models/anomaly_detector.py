@@ -49,8 +49,8 @@ class AnomalyDetector:
             if any(x is None for x in [score, normal_sim, anomaly_sim]):
                 raise ValueError("Failed to compute anomaly score")
                 
-            is_anomaly = score < self.threshold
-            # is_anomaly = anomaly_sim < adaptive_threshold
+            # is_anomaly = score < self.threshold
+            is_anomaly = anomaly_sim < adaptive_threshold
             
             return {
                 'predicted_label': 'anomaly' if is_anomaly else 'normal',
@@ -156,7 +156,7 @@ class AnomalyDetector:
         """
         mean_similarity = np.mean(normal_similarities)
         std_dev = np.std(normal_similarities)
-        return mean_similarity - 1 * std_dev  # 1 standard deviations below mean
+        return mean_similarity - 1.25 * std_dev  # 1 standard deviations below mean
 
     def _compute_anomaly_score(
         self, 

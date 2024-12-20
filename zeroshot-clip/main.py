@@ -53,7 +53,7 @@ def initialize_models(device: str, config: Config) -> Tuple[CLIPModel, AnomalyDe
     clip_model = CLIPModel(device)
     detector = AnomalyDetector(
         model=clip_model,
-        threshold=config.anomaly_threshold
+        #threshold=config.anomaly_threshold
     )
     
     return clip_model, detector

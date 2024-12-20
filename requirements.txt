@@ -1,7 +1,0 @@
-torch
-torchvision
-Pillow
-matplotlib
-tqdm
-dataclasses
-openai-clip 

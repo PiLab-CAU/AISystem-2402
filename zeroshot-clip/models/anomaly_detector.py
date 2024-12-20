@@ -150,7 +150,7 @@ class AnomalyDetector:
             samples_dict: Dictionary of normal sample paths
             n_anomalies_per_class: Number of anomaly samples to generate per class
             
-        Returns: 
+        Returns:
             torch.Tensor: Tensor of anomaly embeddings
         """
         anomaly_embeddings = []

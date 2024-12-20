@@ -5,7 +5,7 @@ from .base import BaseAugmentation
 from .noise import GaussianNoise
 from .geometric import LocalDeformation
 from .color import ColorDistortion
-from .added_aug import ScratchAugmentation, SpotAugmentation, CrackAugmentation
+from .added_aug import ScratchAugmentation, SpotAugmentation, CrackAugmentation, ConcavityAugmentation
 
 class AnomalyAugmenter:
     def __init__(self, severity: float = 0.7):
@@ -16,10 +16,11 @@ class AnomalyAugmenter:
         ]
         
         self.defect_augmentations: List[BaseAugmentation] = [
-            ScratchAugmentation(severity=severity, color=(255, 255, 255)),  # 흰색 스크래치
-            ScratchAugmentation(severity=severity, color=(128, 128, 128)),  # 회색 스크래치
-            SpotAugmentation(severity=severity, color=(255, 0, 0)),         # 빨간 점
-            CrackAugmentation(severity=severity, color=(0, 0, 0))          # 검은 크랙
+            ScratchAugmentation(severity=severity, color=(255, 255, 255)),
+            ScratchAugmentation(severity=severity, color=(128, 128, 128)),
+            SpotAugmentation(severity=severity, color=(255, 0, 0)),
+            CrackAugmentation(severity=severity, color=(0, 0, 0)),
+            ConcavityAugmentation(severity=severity)  # 추가
         ]
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:

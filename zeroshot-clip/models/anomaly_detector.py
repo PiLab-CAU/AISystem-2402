@@ -5,7 +5,7 @@ from tqdm import tqdm
 from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
 from augmentation_type import augmentation_circle, augmentation_square, augmentation_rectangle_light
 import numpy as np
-
+ 
 class AnomalyDetector:
     def __init__(self, model, threshold: float = 0.25):
         """

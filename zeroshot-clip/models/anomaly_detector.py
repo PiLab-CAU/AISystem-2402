@@ -178,9 +178,8 @@ class AnomalyDetector:
             raise ValueError("Failed to generate any anomaly embeddings")
             
         abnormal_emb = torch.cat(anomaly_embeddings, dim=0)
-        # return abnormal_emb / abnormal_emb.norm(dim=-1, keepdim=True)
-        return abnormal_emb
-
+        return abnormal_emb / abnormal_emb.norm(dim=-1, keepdim=True) 
+ 
     def _compute_anomaly_score(
         self, 
         image_features: torch.Tensor

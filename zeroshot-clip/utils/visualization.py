@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 import os
-# import matplotlib.pyplot as plt  # 불필요한 import 제거
-# from PIL import Image  # 불필요한 import 제거
+# import matplotlib.pyplot as plt  
+# from PIL import Image  
 
 def save_predictions(
     image_path: str,
@@ -32,9 +32,8 @@ def save_predictions(
         is_anomaly: Whether the image was classified as anomaly
         save_dir: Directory to save the results (default: "./results")
     """
-    return None  # 모든 연산 건너뛰기
+    return None  
     """
-    # 아래 코드 전체 주석 처리
     try:
         # Create save directory if it doesn't exist
         os.makedirs(save_dir, exist_ok=True)
@@ -109,9 +108,8 @@ def plot_predictions(
         threshold: Threshold used for classification
         is_anomaly: Whether the image was classified as anomaly
     """
-    return None  # 모든 연산 건너뛰기
+    return None 
     """
-    # 아래 코드 전체 주석 처리
     try:
         # Read the image
         image = Image.open(image_path)

@@ -2,11 +2,12 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 from scipy import stats
 from collections import defaultdict
-from scipy.optimize import minimize
-from scipy.stats import gaussian_kde
+import torch
+from sklearn.mixture import GaussianMixture
+from scipy.stats import norm
 
-class EnhancedAdaptiveThresholdManager:
-    """향상된 적응형 임계값 관리 클래스"""
+class RobustAdaptiveThresholdManager:
+    """클래스 특성을 고려한 강건한 적응형 임계값 관리 클래스"""
     
     def __init__(
         self,
@@ -14,96 +15,185 @@ class EnhancedAdaptiveThresholdManager:
         window_size: int = 100,
         adaptation_rate: float = 0.1,
         min_samples: int = 20,
-        optimization_interval: int = 50  # 최적화 수행 간격
+        n_components: int = 2,  # GMM 컴포넌트 수
+        warmup_period: int = 50  # 초기 학습 기간
     ):
         self.base_thresholds = base_thresholds
         self.window_size = window_size
         self.adaptation_rate = adaptation_rate
         self.min_samples = min_samples
-        self.optimization_interval = optimization_interval
+        self.n_components = n_components
+        self.warmup_period = warmup_period
         
-        # 카테고리별 임계값 및 히스토리 저장
+        # 카테고리별 데이터 저장
         self.category_thresholds: Dict[str, List[float]] = {}
         self.score_history: Dict[str, List[float]] = defaultdict(list)
         self.label_history: Dict[str, List[str]] = defaultdict(list)
         
-        # 최적화 메트릭 저장
-        self.optimization_history: Dict[str, List[float]] = defaultdict(list)
+        # 클래스별 특성 저장
+        self.class_characteristics: Dict[str, Dict] = {}
+        self.gmm_models: Dict[str, GaussianMixture] = {}
         
-    def _compute_otsu_threshold(self, scores: np.ndarray) -> float:
-        """Otsu's method를 사용한 임계값 계산"""
-        if len(scores) == 0:
-            return self.base_thresholds[1]  # 기본값 반환
-            
-        # 히스토그램 생성
-        hist, bin_edges = np.histogram(scores, bins=50)
-        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-        
-        # Otsu's method
-        total = len(scores)
-        sum_total = sum(hist * bin_centers)
-        
-        max_variance = 0
-        optimal_threshold = bin_centers[0]
-        
-        weight_1 = 0
-        sum_1 = 0
-        
-        for i, center in enumerate(bin_centers[:-1]):
-            weight_1 += hist[i]
-            weight_2 = total - weight_1
-            
-            if weight_1 == 0 or weight_2 == 0:
-                continue
-                
-            sum_1 += hist[i] * center
-            mean_1 = sum_1 / weight_1
-            mean_2 = (sum_total - sum_1) / weight_2
-            
-            variance = weight_1 * weight_2 * (mean_1 - mean_2) ** 2
-            
-            if variance > max_variance:
-                max_variance = variance
-                optimal_threshold = center
-                
-        return optimal_threshold
+        # 성능 메트릭 저장
+        self.performance_history: Dict[str, List[Dict]] = defaultdict(list)
     
-    def _optimize_threshold_bayesian(
+    def _initialize_class_characteristics(self, category: str) -> None:
+        """클래스별 특성 초기화"""
+        if category not in self.class_characteristics:
+            self.class_characteristics[category] = {
+                'score_mean': None,
+                'score_std': None,
+                'normal_distribution': None,
+                'anomaly_distribution': None,
+                'optimal_threshold_history': [],
+                'performance_metrics': {
+                    'false_positives': [],
+                    'false_negatives': [],
+                    'precision_history': [],
+                    'recall_history': []
+                }
+            }
+    
+    def _fit_gmm(self, scores: np.ndarray, category: str) -> None:
+        """가우시안 혼합 모델 학습"""
+        try:
+            if len(scores) >= self.min_samples:
+                gmm = GaussianMixture(
+                    n_components=self.n_components,
+                    covariance_type='full',
+                    random_state=42
+                )
+                scores_reshaped = scores.reshape(-1, 1)
+                gmm.fit(scores_reshaped)
+                self.gmm_models[category] = gmm
+        except Exception as e:
+            print(f"GMM fitting error for category {category}: {str(e)}")
+    
+    def _compute_robust_threshold(
         self, 
-        normal_scores: np.ndarray, 
-        anomaly_scores: np.ndarray
+        scores: np.ndarray, 
+        labels: np.ndarray, 
+        category: str
     ) -> float:
-        """베이지안 최적화를 통한 임계값 최적화"""
-        if len(normal_scores) == 0 or len(anomaly_scores) == 0:
+        """강건한 임계값 계산"""
+        try:
+            normal_scores = scores[labels == 'normal']
+            anomaly_scores = scores[labels == 'anomaly']
+            
+            if len(normal_scores) < self.min_samples or len(anomaly_scores) < self.min_samples:
+                return self.base_thresholds[1]
+            
+            # 정상/이상 분포 추정
+            normal_kde = stats.gaussian_kde(normal_scores)
+            anomaly_kde = stats.gaussian_kde(anomaly_scores)
+            
+            # GMM 기반 임계값 계산
+            if category in self.gmm_models:
+                gmm = self.gmm_models[category]
+                x = np.linspace(min(scores), max(scores), 1000).reshape(-1, 1)
+                gmm_probs = gmm.predict_proba(x)
+                gmm_threshold = x[np.argmax(np.abs(np.diff(gmm_probs, axis=1)))]
+            else:
+                gmm_threshold = np.mean(scores)
+            
+            # 분포 기반 임계값 계산
+            x_range = np.linspace(min(scores), max(scores), 1000)
+            normal_pdf = normal_kde(x_range)
+            anomaly_pdf = anomaly_kde(x_range)
+            
+            # 교차점 찾기
+            intersections = x_range[np.where(np.diff(np.signbit(normal_pdf - anomaly_pdf)))[0]]
+            if len(intersections) > 0:
+                dist_threshold = float(np.median(intersections))
+            else:
+                dist_threshold = np.mean([np.mean(normal_scores), np.mean(anomaly_scores)])
+            
+            # 클래스 특성 기반 가중치 계산
+            if self.class_characteristics[category]['score_mean'] is not None:
+                historical_weight = 0.3
+                current_weight = 0.7
+                historical_mean = self.class_characteristics[category]['score_mean']
+                historical_std = self.class_characteristics[category]['score_std']
+                
+                # z-score 기반 이상치 제거
+                z_scores = np.abs((scores - historical_mean) / historical_std)
+                valid_scores = scores[z_scores < 3]
+                if len(valid_scores) > self.min_samples:
+                    current_mean = np.mean(valid_scores)
+                else:
+                    current_mean = np.mean(scores)
+                
+                # 가중 평균 계산
+                weighted_mean = (historical_mean * historical_weight + 
+                               current_mean * current_weight)
+            else:
+                weighted_mean = np.mean(scores)
+            
+            # 최종 임계값 계산 (GMM, 분포, 가중평균 결합)
+            final_threshold = (0.4 * gmm_threshold + 
+                             0.4 * dist_threshold + 
+                             0.2 * weighted_mean)
+            
+            return float(final_threshold)
+            
+        except Exception as e:
+            print(f"Error in robust threshold computation: {str(e)}")
             return self.base_thresholds[1]
+    
+    def _update_class_characteristics(
+        self, 
+        category: str, 
+        scores: np.ndarray, 
+        labels: np.ndarray
+    ) -> None:
+        """클래스 특성 업데이트"""
+        try:
+            normal_scores = scores[labels == 'normal']
+            anomaly_scores = scores[labels == 'anomaly']
             
-        def objective(threshold):
-            # 임계값 기준 분류 성능 계산
-            tp = np.sum(anomaly_scores > threshold)
-            tn = np.sum(normal_scores <= threshold)
-            fp = np.sum(normal_scores > threshold)
-            fn = np.sum(anomaly_scores <= threshold)
+            if len(normal_scores) >= self.min_samples:
+                # 통계치 업데이트
+                self.class_characteristics[category]['score_mean'] = np.mean(normal_scores)
+                self.class_characteristics[category]['score_std'] = np.std(normal_scores)
+                
+                # 분포 업데이트
+                self.class_characteristics[category]['normal_distribution'] = \
+                    stats.gaussian_kde(normal_scores)
+                
+                if len(anomaly_scores) >= self.min_samples:
+                    self.class_characteristics[category]['anomaly_distribution'] = \
+                        stats.gaussian_kde(anomaly_scores)
+                
+        except Exception as e:
+            print(f"Error updating class characteristics: {str(e)}")
+    
+    def _evaluate_performance(
+        self, 
+        category: str, 
+        threshold: float, 
+        scores: np.ndarray, 
+        labels: np.ndarray
+    ) -> None:
+        """성능 평가 및 기록"""
+        try:
+            predictions = scores > threshold
+            true_labels = labels == 'anomaly'
             
-            # F1 점수 계산
+            tp = np.sum((predictions == True) & (true_labels == True))
+            fp = np.sum((predictions == True) & (true_labels == False))
+            fn = np.sum((predictions == False) & (true_labels == True))
+            tn = np.sum((predictions == False) & (true_labels == False))
+            
             precision = tp / (tp + fp) if (tp + fp) > 0 else 0
             recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
             
-            return -f1  # 최소화 문제로 변환
-        
-        # 최적화 범위 설정
-        bounds = [(min(np.min(normal_scores), np.min(anomaly_scores)), 
-                  max(np.max(normal_scores), np.max(anomaly_scores)))]
-        
-        # 베이지안 최적화 수행
-        result = minimize(
-            objective,
-            x0=np.mean(bounds[0]),
-            bounds=bounds,
-            method='L-BFGS-B'
-        )
-        
-        return result.x[0]
+            self.class_characteristics[category]['performance_metrics']['false_positives'].append(fp)
+            self.class_characteristics[category]['performance_metrics']['false_negatives'].append(fn)
+            self.class_characteristics[category]['performance_metrics']['precision_history'].append(precision)
+            self.class_characteristics[category]['performance_metrics']['recall_history'].append(recall)
+            
+        except Exception as e:
+            print(f"Error evaluating performance: {str(e)}")
     
     def _update_category_thresholds(self, category: str) -> None:
         """카테고리별 임계값 업데이트"""
@@ -113,29 +203,31 @@ class EnhancedAdaptiveThresholdManager:
         if len(np.unique(labels)) < 2:
             self.category_thresholds[category] = self.base_thresholds
             return
-            
-        normal_scores = scores[labels == 'normal']
-        anomaly_scores = scores[labels == 'anomaly']
         
-        if len(normal_scores) < self.min_samples or len(anomaly_scores) < self.min_samples:
-            return
-            
         try:
-            # Otsu's method로 초기 임계값 계산
-            otsu_threshold = self._compute_otsu_threshold(scores)
+            # 클래스 특성 초기화 및 업데이트
+            self._initialize_class_characteristics(category)
+            self._update_class_characteristics(category, scores, labels)
             
-            # 베이지안 최적화로 미세 조정
-            optimal_threshold = self._optimize_threshold_bayesian(normal_scores, anomaly_scores)
+            # GMM 모델 학습
+            self._fit_gmm(scores, category)
             
-            # 두 방법의 결과를 결합
-            final_threshold = (otsu_threshold + optimal_threshold) / 2
+            # 강건한 임계값 계산
+            optimal_threshold = self._compute_robust_threshold(scores, labels, category)
             
-            # 새로운 임계값 세트 생성 (spread 조정)
-            spread = np.std(scores) * 0.2  # 데이터 분포에 따른 동적 spread
+            # 성능 평가
+            self._evaluate_performance(category, optimal_threshold, scores, labels)
+            
+            # 임계값 범위 설정
+            spread = self.class_characteristics[category]['score_std'] \
+                    if self.class_characteristics[category]['score_std'] is not None \
+                    else np.std(scores)
+            spread = min(spread * 0.5, 0.1)  # 범위 제한
+            
             new_thresholds = [
-                final_threshold - spread,
-                final_threshold,
-                final_threshold + spread
+                optimal_threshold - spread,
+                optimal_threshold,
+                optimal_threshold + spread
             ]
             
             # 점진적 업데이트
@@ -150,8 +242,10 @@ class EnhancedAdaptiveThresholdManager:
             
             self.category_thresholds[category] = updated_thresholds
             
-            # 최적화 히스토리 저장
-            self.optimization_history[category].append(final_threshold)
+            # 최적 임계값 히스토리 업데이트
+            self.class_characteristics[category]['optimal_threshold_history'].append(
+                optimal_threshold
+            )
             
         except Exception as e:
             print(f"Error updating thresholds for category {category}: {str(e)}")
@@ -171,9 +265,9 @@ class EnhancedAdaptiveThresholdManager:
             self.score_history[category].pop(0)
             self.label_history[category].pop(0)
         
-        # 일정 간격으로 임계값 최적화
+        # 초기 학습 기간 이후 임계값 업데이트
         if len(self.score_history[category]) >= self.min_samples and \
-           len(self.score_history[category]) % self.optimization_interval == 0:
+           len(self.score_history[category]) >= self.warmup_period:
             self._update_category_thresholds(category)
     
     def get_thresholds(self, category: str) -> List[float]:
@@ -185,6 +279,8 @@ class EnhancedAdaptiveThresholdManager:
         thresholds = self.get_thresholds(category)
         return thresholds[len(thresholds)//2]
     
-    def get_optimization_history(self, category: str) -> List[float]:
-        """카테고리별 임계값 최적화 히스토리 반환"""
-        return self.optimization_history.get(category, [])
+    def get_class_performance(self, category: str) -> Dict:
+        """클래스별 성능 메트릭 반환"""
+        if category in self.class_characteristics:
+            return self.class_characteristics[category]['performance_metrics']
+        return None

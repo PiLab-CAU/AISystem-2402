@@ -2,7 +2,7 @@ import torch
 from typing import Dict, List, Tuple
 from PIL import Image
 from tqdm import tqdm
-from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
+from utils.augmentation.anomaly_augmenter import EnhancedAnomalyAugmenter
 from typing import Dict, List, Tuple
 import numpy as np
 import torch
@@ -238,7 +238,7 @@ class EnhancedEnsembleAnomalyDetector:
             torch.Tensor: Tensor of anomaly embeddings
         """
         anomaly_embeddings = []
-        augmenter = AnomalyAugmenter(severity=0.4)
+        augmenter = EnhancedAnomalyAugmenter(severity=0.4)
         
         for class_name, image_paths in tqdm(samples_dict.items(), 
                                           desc="Generating anomaly embeddings"):

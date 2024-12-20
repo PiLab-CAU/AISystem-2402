@@ -49,8 +49,8 @@ class AnomalyDetector:
             if any(x is None for x in [score, normal_sim, anomaly_sim]):
                 raise ValueError("Failed to compute anomaly score")
                 
-            # is_anomaly = score < self.threshold
-            is_anomaly = anomaly_sim < adaptive_threshold
+            is_anomaly = score < self.threshold
+            # is_anomaly = anomaly_sim < adaptive_threshold
             
             return {
                 'predicted_label': 'anomaly' if is_anomaly else 'normal',

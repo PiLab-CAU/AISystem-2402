@@ -5,54 +5,38 @@ from .base import BaseAugmentation
 from .noise import GaussianNoise
 from .geometric import LocalDeformation
 from .color import ColorDistortion
-from .randomrotate import RandomRotation
-from .blur import RandomBlur
-from .reddot import RedDotAnomaly
-from .scartch import RandomScratch
-
-class RandomDeletion(BaseAugmentation):
-    def __call__(self, image: Image.Image) -> Image.Image:
-        img_np = np.array(image)
-        height, width = img_np.shape[:2]
-        
-        num_patches = np.random.randint(1, 4)
-        for _ in range(num_patches):
-            x = np.random.randint(0, width - width//4)
-            y = np.random.randint(0, height - height//4)
-            patch_w = np.random.randint(width//8, width//4)
-            patch_h = np.random.randint(height//8, height//4)
-            img_np[y:y+patch_h, x:x+patch_w] = 0
-            
-        return Image.fromarray(img_np)
+from .added_aug import ScratchAugmentation, SpotAugmentation, CrackAugmentation
 
 class AnomalyAugmenter:
     def __init__(self, severity: float = 0.7):
-        self.augmentations: List[BaseAugmentation] = [
-            GaussianNoise(severity * 1.4),  
-            LocalDeformation(severity * 1.2),  
-            RandomDeletion(severity * 1.1),     
-            RandomRotation(severity * 1.6), 
-            RandomBlur(severity * 1.7),    
-            RedDotAnomaly(severity * 1.5),
-            RandomScratch(severity * 1.3)
+        self.basic_augmentations: List[BaseAugmentation] = [
+            GaussianNoise(severity),
+            LocalDeformation(severity),
+            ColorDistortion(severity),
+        ]
+        
+        self.defect_augmentations: List[BaseAugmentation] = [
+            ScratchAugmentation(severity=severity, color=(255, 255, 255)),  # 흰색 스크래치
+            ScratchAugmentation(severity=severity, color=(128, 128, 128)),  # 회색 스크래치
+            SpotAugmentation(severity=severity, color=(255, 0, 0)),         # 빨간 점
+            CrackAugmentation(severity=severity, color=(0, 0, 0))          # 검은 크랙
         ]
     
     def generate_anomaly(self, image: Image.Image) -> Image.Image:
-        # 최소 2개, 최대 4개의 augmentation 적용
-        num_augs = np.random.randint(2, 5)
-        # 더 다양한 조합의 이상치 생성을 위해 weight 부여
-        weights = [1.5, 1.2, 1.0, 1.0, 1.0, 1.3, 1.4]  # 각 augmentation에 대한 가중치
-        weights = np.array(weights) / sum(weights)
-        
-        selected_augs = np.random.choice(
-            self.augmentations, 
-            num_augs, 
-            replace=False,
-            p=weights
-        )
-        
         img = image
+
+        n_basic = np.random.randint(1, 3)
+        selected_basic = np.random.choice(self.basic_augmentations, n_basic, replace=False)
+        selected_defect = np.random.choice(self.defect_augmentations, 1)
+        
+        selected_augs = list(selected_basic) + list(selected_defect)
+        np.random.shuffle(selected_augs)
+        
         for aug in selected_augs:
-            img = aug(img)
-            
+            try:
+                img = aug(img)
+            except Exception as e:
+                print(f"Error applying augmentation {aug.__class__.__name__}: {str(e)}")
+                continue
+                
         return img

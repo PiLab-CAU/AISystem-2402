@@ -6,13 +6,11 @@ def save_predictions(
     image_path: str,
     true_label: str,
     predicted_label: str,
-    predicted_class: str,  # 새로 추가된 매개변수
     anomaly_score: float,
     normal_similarity: float,
     anomaly_similarity: float,
     threshold: float,
     is_anomaly: bool,
-    class_scores: dict = None,  # 클래스별 점수도 추가
     save_dir: str = "./results"
 ) -> None:
     """
@@ -22,13 +20,11 @@ def save_predictions(
         image_path: Path to the input image
         true_label: Ground truth label
         predicted_label: Predicted label
-        predicted_class: Predicted class name
         anomaly_score: Computed anomaly score
         normal_similarity: Similarity with normal class
         anomaly_similarity: Similarity with anomaly class
         threshold: Threshold used for classification
         is_anomaly: Whether the image was classified as anomaly
-        class_scores: Dictionary of scores for each class
         save_dir: Directory to save the results (default: "./results")
     """
     try:
@@ -51,18 +47,11 @@ def save_predictions(
             f"Prediction Details\n"
             f"True Label: {true_label}\n"
             f"Predicted Label: {predicted_label}\n"
-            f"Predicted Class: {predicted_class}\n"
             f"Anomaly Score: {anomaly_score:.3f}\n"
             f"Normal Similarity: {normal_similarity:.3f}\n"
             f"Anomaly Similarity: {anomaly_similarity:.3f}\n"
             f"Threshold: {threshold}"
         )
-        
-        # Add class scores if available
-        if class_scores:
-            text += "\n\nClass Scores:"
-            for class_name, score in class_scores.items():
-                text += f"\n{class_name}: {score:.3f}"
         
         # Display text
         ax2.text(0.1, 0.5, text, fontsize=10, verticalalignment='center')
@@ -86,7 +75,7 @@ def save_predictions(
         
     except Exception as e:
         print(f"Error saving visualization for {image_path}: {str(e)}")
-        
+
 def plot_predictions(
     image_path: str,
     true_label: str,

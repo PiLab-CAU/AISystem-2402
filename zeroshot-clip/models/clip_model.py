@@ -19,9 +19,10 @@ class CLIPModel:
         Returns:
             tuple: (model, preprocess_function)
         """
-        model, preprocess = clip.load('ViT-B/16', self.device)
+        model, preprocess = clip.load('ViT-L/14', self.device)
         return model, preprocess
-    
+
+
     def extract_features(self, image: torch.Tensor) -> torch.Tensor:
         """
         Extract features from an image using CLIP.
@@ -47,6 +48,7 @@ class CLIPModel:
         
 
 if __name__ == '__main__':
+
     model = CLIPModel('cuda:0')
 
     x = torch.randn(3,224,224).unsqueeze(0).to(model.device)
@@ -55,4 +57,5 @@ if __name__ == '__main__':
     #print(model)
     #print(model.preprocess)
     print(model.device)
-    print(model.extract_features(x).min(), model.extract_features(x).max())
+    patches = model.extract_patch_features(x)
+    print(patches)

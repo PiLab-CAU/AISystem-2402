@@ -5,7 +5,7 @@ from tqdm import tqdm
 from utils.augmentation.anomaly_augmenter import AnomalyAugmenter
 from augmentation_type import augmentation_circle, augmentation_square, augmentation_rectangle_light
 import numpy as np
- 
+
 class AnomalyDetector:
     def __init__(self, model, threshold: float = 0.25):
         """
@@ -177,7 +177,9 @@ class AnomalyDetector:
         if not anomaly_embeddings:
             raise ValueError("Failed to generate any anomaly embeddings")
             
-        return torch.cat(anomaly_embeddings, dim=0)
+        abnormal_emb = torch.cat(anomaly_embeddings, dim=0)
+        # return abnormal_emb / abnormal_emb.norm(dim=-1, keepdim=True)
+        return abnormal_emb
 
     def _compute_anomaly_score(
         self, 
@@ -219,3 +221,4 @@ class AnomalyDetector:
             print(f"Error in compute_anomaly_score: {str(e)}")
             return None, None, None
         
+
